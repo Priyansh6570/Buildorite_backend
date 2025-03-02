@@ -1,0 +1,53 @@
+{
+  "name": "buildorite",
+  "version": "1.0.0",
+  "description": "buildorite backend",
+  "keywords": [
+    "logistics",
+    "mining",
+    "transportation",
+    "supply chain",
+    "truck management",
+    "mine management",
+    "material marketplace",
+    "React Native",
+    "Express.js",
+    "MongoDB",
+    "Firebase",
+    "digital logistics",
+    "QR verification",
+    "Google Maps API"
+  ],
+  "homepage": "https://github.com/Priyansh6570/Buildorite_backend#readme",
+  "bugs": {
+    "url": "https://github.com/Priyansh6570/Buildorite_backend/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Priyansh6570/Buildorite_backend.git"
+  },
+  "license": "ISC",
+  "author": "Priyansh Mishra",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"No test specified\" && exit 0",
+    "start": "nodemon server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-fileupload": "^1.5.1",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.10.1",
+    "socket.io": "^4.8.1",
+    "validator": "^13.12.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}
