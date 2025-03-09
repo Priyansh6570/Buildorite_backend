@@ -39,12 +39,12 @@ app.use('/api/v1/request', requestRoute);
 app.use('/api/v1/notifications', notificationRoute);
 
 // Serve static files if in production
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, 'dist')));
-    app.get('*', (req, res) => {
-        res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
-    });
-}
+// if (process.env.NODE_ENV === 'production') {
+//   app.use(express.static(path.join(__dirname, 'dist')));
+//     app.get('*', (req, res) => {
+//         res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+//     });
+// }
 
 app.use(errorMiddleware);
 
