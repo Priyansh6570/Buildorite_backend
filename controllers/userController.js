@@ -3,7 +3,7 @@ import catchAsyncError from '../middleware/catchAsyncError.js';
 import ErrorHandler from '../utils/errorHandler.js';
 import { applyQuery } from '../middleware/queryMiddleware.js';
 
-// Get user profile -> /myprofile
+// Get user profile -> api/v1/user/myprofile
 export const getUserProfile = catchAsyncError(async (req, res, next) => {
   const user = await User.findById(req.user.id);
   if(!user) return next(new ErrorHandler('User not found', 404));

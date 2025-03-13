@@ -1,9 +1,7 @@
 import express from 'express';
-import { refreshAccessToken, registerUser, loginUser, checkUser, logoutUser } from '../controllers/authController.js';
+import { registerUser, loginUser, checkUser, logoutUser } from '../controllers/authController.js';
 
 const router = express.Router();
-
-router.post('/refresh-token', refreshAccessToken);
 
 router.post('/check-user', checkUser);
 

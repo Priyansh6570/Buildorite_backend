@@ -5,6 +5,7 @@ import {
   getMineById,
   deleteMine,
   updateMine,
+  getMyMines,
 } from "../controllers/mineController.js";
 import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
 
@@ -14,6 +15,7 @@ router
   .route("/mine")
   .get(protect, getAllMines)
   .post(protect, authorizeRoles("mine_owner"), createMine);
+router.route("/my-mines").get(protect, getMyMines);
 router
   .route("/mine/:id")
   .get(getMineById)

@@ -4,10 +4,9 @@ import catchAsyncError from "../middleware/catchAsyncError.js";
 import ErrorHandler from "../utils/errorHandler.js";
 import { applyQuery } from "../middleware/queryMiddleware.js";
 
-// Create a new mine -> /mines (Mine Owner only)
+// Create a new mine -> api/v1/mine/mines (Mine Owner only)
 export const createMine = catchAsyncError(async (req, res, next) => {
   const { name, location, operational_hours, banner_images } = req.body;
-
   if (!Array.isArray(banner_images)) {
     return next(
       new ErrorHandler(
@@ -16,7 +15,7 @@ export const createMine = catchAsyncError(async (req, res, next) => {
       )
     );
   }
-
+  
   const mine = await Mine.create({
     name,
     location,
@@ -24,7 +23,7 @@ export const createMine = catchAsyncError(async (req, res, next) => {
     banner_images,
     owner_id: req.user.id,
   });
-
+  
   await User.findByIdAndUpdate(
     req.user.id,
     {
@@ -39,10 +38,10 @@ export const createMine = catchAsyncError(async (req, res, next) => {
   });
 });
 
-// Get all mines -> /mines (Public)
+// Get all mines -> api/v1/mine/mines (Public)
 export const getAllMines = applyQuery(Mine);
 
-// Get mine by ID -> /mines/:id
+// Get mine by ID -> api/v1/mine/mines/:id
 export const getMineById = catchAsyncError(async (req, res, next) => {
   const mine = await Mine.findById(req.params.id)
     .populate("owner_id", "name phone")
@@ -57,7 +56,17 @@ export const getMineById = catchAsyncError(async (req, res, next) => {
   });
 });
 
-// Update mine -> /mines/:id (Mine Owner only)
+// Get all mines by logged in user -> api/v1/mine/my-mines (Mine Owner only)
+export const getMyMines = catchAsyncError(async (req, res, next) => {
+  const mines = await Mine.find({ owner_id: req.user.id }).sort("-createdAt");
+
+  res.status(200).json({
+    success: true,
+    mines,
+  });
+});
+
+// Update mine -> api/v1/mine/mines/:id (Mine Owner only)
 export const updateMine = catchAsyncError(async (req, res, next) => {
   let mine = await Mine.findById(req.params.id);
 
@@ -77,7 +86,7 @@ export const updateMine = catchAsyncError(async (req, res, next) => {
   });
 });
 
-// Delete mine -> /mines/:id (Mine Owner or Admin)
+// Delete mine -> api/v1/mine/mines/:id (Mine Owner or Admin)
 export const deleteMine = catchAsyncError(async (req, res, next) => {
   const mine = await Mine.findById(req.params.id);
 

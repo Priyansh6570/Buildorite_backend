@@ -62,7 +62,7 @@ export const sendNotification = (recipientId, data) => {
     }
 };
 
-server.listen(process.env.PORT, '0.0.0.0',() => {
+server.listen(process.env.PORT,() => {
     console.log(`Server running on ${process.env.PORT}`);
 });
 

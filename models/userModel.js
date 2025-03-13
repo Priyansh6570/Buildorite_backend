@@ -36,25 +36,16 @@ const userSchema = new mongoose.Schema({
   mine_id: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: "Mine",
-    required: function () {
-      return this.role === "mine_owner" || this.role === "admin";
-    },
   }],
   truck_ids: [
     {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Truck",
-      required: function () {
-        return this.role === "truck_owner" || this.role === "admin";
-      },
     },
   ],
   assigned_trip_id: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: "Trip",
-    required: function () {
-      return this.role === "driver" || this.role === "admin";
-    },
   }],
   createdAt: {
     type: Date,

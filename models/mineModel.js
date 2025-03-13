@@ -54,13 +54,34 @@ const mineSchema = new mongoose.Schema(
       },
     ],
     operational_hours: {
-      monday: { open: { type: String, default: "09:00" }, close: { type: String, default: "18:00" } },
-      tuesday: { open: { type: String, default: "09:00" }, close: { type: String, default: "18:00" } },
-      wednesday: { open: { type: String, default: "09:00" }, close: { type: String, default: "18:00" } },
-      thursday: { open: { type: String, default: "09:00" }, close: { type: String, default: "18:00" } },
-      friday: { open: { type: String, default: "09:00" }, close: { type: String, default: "18:00" } },
-      saturday: { open: { type: String, default: "09:00" }, close: { type: String, default: "18:00" } },
-      sunday: { open: { type: String, default: "Closed" }, close: { type: String, default: "Closed" } },
+      monday: {
+        open: { type: String, default: null },
+        close: { type: String, default: null },
+      },
+      tuesday: {
+        open: { type: String, default: null },
+        close: { type: String, default: null },
+      },
+      wednesday: {
+        open: { type: String, default: null },
+        close: { type: String, default: null },
+      },
+      thursday: {
+        open: { type: String, default: null },
+        close: { type: String, default: null },
+      },
+      friday: {
+        open: { type: String, default: null },
+        close: { type: String, default: null },
+      },
+      saturday: {
+        open: { type: String, default: null },
+        close: { type: String, default: null },
+      },
+      sunday: {
+        open: { type: String, default: null },
+        close: { type: String, default: null },
+      },
     },
   },
   {
