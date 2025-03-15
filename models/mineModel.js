@@ -31,8 +31,8 @@ const mineSchema = new mongoose.Schema(
     },
     banner_images: [
       {
-        type: String,
-        required: false,
+        url: { type: String, required: true },
+        public_id: { type: String, required: true },
       },
     ],
     materials: [
