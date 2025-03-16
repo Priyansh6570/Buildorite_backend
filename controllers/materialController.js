@@ -7,13 +7,18 @@ import { applyQuery } from '../middleware/queryMiddleware.js';
 // Create Material -> POST /materials
 export const createMaterial = catchAsyncError(async (req, res, next) => {
   const { name, mine_id, prices, availability_status, stock_quantity, photos } = req.body;
+  const formattedPrices = prices.map((price) => ({
+    unit: price.unit,
+    quantity: Number(price.quantity),
+    price: Number(price.price),
+  }));
 
   const material = await Material.create({
     name,
     mine_id,
-    prices,
-    availability_status,
-    stock_quantity,
+    prices: formattedPrices,
+    availability_status: availability_status.toLowerCase(),
+    stock_quantity: Number(stock_quantity),
     photos,
   });
 

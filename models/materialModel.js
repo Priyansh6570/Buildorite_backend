@@ -8,7 +8,6 @@ const priceSchema = new mongoose.Schema({
   },
   unit: {
     type: String,
-    // enum: ["ton", "kg", "cubic_meter", "litre", "piece"],
     required: [true, "Unit is required"],
   },
   price: {
@@ -44,8 +43,8 @@ const materialSchema = new mongoose.Schema(
     },
     photos: [
       {
-        type: String,
-        required: false,
+        url: { type: String, required: true },
+        public_id: { type: String, required: true },
       },
     ],
   },
