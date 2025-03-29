@@ -3,7 +3,6 @@ import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import fileUpload from 'express-fileupload';
-import path from 'path';
 
 import errorMiddleware from './middleware/errorMiddleware.js';
 

@@ -66,12 +66,17 @@ export const getMaterialsByMineId = catchAsyncError(async (req, res, next) => {
 
 // Update Material -> PUT /materials/:id
 export const updateMaterial = catchAsyncError(async (req, res, next) => {
-
+  if (req.body.availability_status) {
+    req.body.availability_status = req.body.availability_status.toLowerCase();
+  }
+  console.log("Updating material with ID:", req.body);
   const material = await Material.findByIdAndUpdate(req.params.id, req.body, {
     new: true,
     runValidators: true,
   });
   if (!material) return next(new ErrorHandler("Material not found", 404));
+
+  console.log("Material updated successfully : ");
 
   res.status(200).json({
     success: true,

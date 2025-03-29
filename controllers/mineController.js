@@ -71,13 +71,10 @@ export const updateMine = catchAsyncError(async (req, res, next) => {
   if (mine.owner_id.toString() !== req.user.id)
     return next(new ErrorHandler("You can only update your own mines", 403));
   
-  console.log("Mine found : ", req.body);
   mine = await Mine.findByIdAndUpdate(req.params.id, req.body, {
     new: true,
     runValidators: true,
   });
-
-  console.log("Mine updated successfully : ", mine);
 
   res.status(200).json({
     success: true,

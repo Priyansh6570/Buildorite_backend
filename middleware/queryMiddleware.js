@@ -12,10 +12,12 @@ export const applyQuery = (Model) => {
 
       const results = await query.exec();
       const totalCount = await Model.countDocuments();
-
+      const totalPages = Math.ceil(totalCount / (parseInt(limit) || 10));
+      
       res.status(200).json({
         success: true,
         totalCount,
+        totalPages,
         page: parseInt(page) || 1,
         limit: parseInt(limit) || 10,
         data: results,
