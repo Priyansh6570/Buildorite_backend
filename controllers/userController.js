@@ -16,6 +16,22 @@ export const getUserProfile = catchAsyncError(async (req, res, next) => {
 // Get all users (Admin only) -> /admin/users
 export const getAllUsers = applyQuery(User);
 
+// Update user profile (name, email, phone) -> api/v1/user/update
+export const updateUserProfile = catchAsyncError(async (req, res, next) => {
+  const { name, email, phone } = req.body;
+  const user = await User.findById(req.user.id);
+  if (!user) return next(new ErrorHandler('User not found', 404));
+  user.name = name || user.name;
+  user.email = email || user.email;
+  user.phone = phone || user.phone;
+  await user.save();
+  res.status(200).json({
+    success: true,
+    message: 'Profile updated successfully',
+    user,
+  });
+});
+
 // Get all users by role (Admin only) -> /admin/users?role=role
 export const getUsersByRole = catchAsyncError(async (req, res, next) => {
     const { role } = req.query;
