@@ -6,31 +6,45 @@ import Truck from '../models/truckModel.js';
 
 // Send connection request -> /connection-request
 export const sendConnectionRequest = catchAsyncError(async (req, res, next) => {
-    try {
-      const { to_user } = req.body;
-      const from_user = req.user._id;
+  const { to_user, truck_id } = req.body;
+  const from_user = req.user._id;
+
+  const truck = await Truck.findById(truck_id);
+  if (!truck || !truck.driver_id.equals(from_user)) {
+    return next(new ErrorHandler("Invalid truck or you're not the driver of this truck", 400));
+  }
   
-      const existingRequest = await Connection.findOne({ from_user, to_user });
-      if (existingRequest) {
-        return next(new ErrorHandler('Request already sent', 400));
-      }
+  const existing = await Connection.findOne({ from_user, to_user });
+  if (existing) return next(new ErrorHandler('Request already sent', 400));
   
-      const connection = await Connection.create({ from_user, to_user });
-      res.status(201).json({ success: true, data: connection });
-    } catch (error) {
-      next(error);
-    }
+  const connection = await Connection.create({ from_user, to_user });
+
+  res.status(201).json({ success: true, data: connection });
   });
 
 // Get all pending connection requests -> /pending-connections
-  export const getPendingConnections = catchAsyncError(async (req, res) => {
-    try {
-      const connections = await Connection.find({ to_user: req.user._id, status: 'pending' }).populate('from_user', 'name role');
-      res.status(200).json({ success: true, data: connections });
-    } catch (error) {
-      res.status(500).json({ success: false, message: error.message });
-    }
-  });
+export const getPendingConnections = catchAsyncError(async (req, res) => {
+  try {
+    const connections = await Connection.find({ to_user: req.user._id, status: 'pending' })
+      .populate('from_user', 'name role')
+
+    const enriched = await Promise.all(
+      connections.map(async (c) => {
+        const truck = await Truck.findOne({ driver_id: c.from_user._id })
+        return {
+          _id: c._id,
+          from_user: c.from_user,
+          truck: truck || null,
+          createdAt: c.createdAt
+        }
+      })
+    )
+
+    res.status(200).json({ success: true, data: enriched })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+})
   
   // Accept connection request -> /accept-connection/:id
   export const acceptConnectionRequest = catchAsyncError(async (req, res, next) => {
@@ -65,13 +79,17 @@ export const sendConnectionRequest = catchAsyncError(async (req, res, next) => {
   // Reject connection request -> /reject-connection/:id
   export const rejectConnectionRequest = catchAsyncError(async (req, res, next) => {
     try {
-      const { id } = req.params;
+      const { id } = req.params
   
-      const connection = await Connection.findByIdAndUpdate(id, { status: 'rejected' }, { new: true });
-      if (!connection) return next(new ErrorHandler('Request not found', 404));
+      const connection = await Connection.findById(id)
+      if (!connection) return next(new ErrorHandler('Request not found', 404))
+      if (connection.status !== 'pending') return next(new ErrorHandler('Request is already processed', 400))
   
-      res.status(200).json({ success: true, data: connection });
+      connection.status = 'rejected'
+      await connection.save()
+  
+      res.status(200).json({ success: true, data: connection })
     } catch (error) {
-      next(error);
+      next(error)
     }
-  });
+  })  

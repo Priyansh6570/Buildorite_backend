@@ -1,22 +1,20 @@
 import catchAsyncError from '../middleware/catchAsyncError.js';
+import ErrorHandler from "../utils/errorHandler.js";
 import Truck from '../models/truckModel.js';
 import User from '../models/userModel.js';
 
 // Create a new truck -> /create-truck
 export const createTruck = catchAsyncError(async (req, res, next) => {
   try {
-    const { name, registration_number, current_location, driver_id } = req.body;
-    const truck_owner_id = req.user._id;
+    const { name, registration_number, current_location } = req.body;
+    const driver_id = req.user._id;
 
     const truck = await Truck.create({
       name,
       registration_number,
       current_location,
       driver_id,
-      truck_owner_id,
     });
-
-    await User.findByIdAndUpdate(truck_owner_id, { $push: { truck_ids: truck._id } });
 
     res.status(201).json({ success: true, data: truck });
   } catch (error) {
@@ -25,12 +23,10 @@ export const createTruck = catchAsyncError(async (req, res, next) => {
 });
 
 // Get details -> /my-truck
-export const getMyTruck = catchAsyncError(async (req, res) => {
+export const getMyTruck = catchAsyncError(async (req, res, next) => {
   try{
     const truck = await Truck.findOne({ driver_id: req.user._id });
-
-    if(!truck) return next(new ErrorHandler('Truck not found', 404));
-
+    
     res.status(200).json({ success: true, data: truck });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

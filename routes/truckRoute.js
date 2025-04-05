@@ -4,7 +4,7 @@ import { protect, authorizeRoles } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-router.route('/create-truck').post(protect, authorizeRoles('truck_owner'), createTruck);
+router.route('/create-truck').post(protect, authorizeRoles('driver'), createTruck);
 
 router.route('/my-truck').get(protect, authorizeRoles('driver'), getMyTruck);
 
