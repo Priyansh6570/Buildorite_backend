@@ -3,7 +3,7 @@ import { buildQuery } from "../utils/queryUtils.js";
 export const applyQuery = (Model) => {
   return async (req, res, next) => {
     try {
-      const { page, limit, sortBy, order, lat, lng } = req.query;
+      const { page, limit, sortBy, order, lat, lng} = req.query;
       const userCoordinates = lat && lng ? [parseFloat(lng), parseFloat(lat)] : null;
 
       let query = Model.find();

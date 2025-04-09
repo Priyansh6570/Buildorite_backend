@@ -28,7 +28,7 @@ export const registerUser = catchAsyncError(async (req, res, next) => {
   const existingUser = await User.findOne({ $or: [{ email }, { phone }] });
   if (existingUser)
     return next(
-      new ErrorHandler("User with this phone already exists", 400)
+      new ErrorHandler("User with this Email already exists", 400)
     );
 
   const user = await User.create({

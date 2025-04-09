@@ -6,7 +6,7 @@ const router = express.Router();
 
 router.route('/myprofile').get(protect, getUserProfile);
 
-router.route('/admin/users').get(protect, authorizeRoles('admin'), (req, res, next) => {
+router.route('/admin/users').get(protect, authorizeRoles('driver'), (req, res, next) => {
     if (req.query.role) getUsersByRole(req, res, next);
     else getAllUsers(req, res, next);
   });

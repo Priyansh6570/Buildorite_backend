@@ -25,7 +25,10 @@ export const createTruck = catchAsyncError(async (req, res, next) => {
 // Get details -> /my-truck
 export const getMyTruck = catchAsyncError(async (req, res, next) => {
   try{
-    const truck = await Truck.findOne({ driver_id: req.user._id });
+    const truck = await Truck.findOne({ driver_id: req.user._id }).populate({
+      path: 'truck_owner_id',
+      select: 'name',
+    });
     
     res.status(200).json({ success: true, data: truck });
   } catch (error) {

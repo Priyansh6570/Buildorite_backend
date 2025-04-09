@@ -9,6 +9,11 @@ export const buildQuery = (query, { page = 1, limit = 10, sortBy = 'price', orde
     if (sortBy === 'price') {
       query.sort({ 'prices.price': sortOrder });
     }
+
+    // filtering by role (for users)
+    // if (role) {
+    //   query.where('role').equals(role);
+    // }
   
     // Sorting by distance (for mines)
     if (sortBy === 'distance' && userCoordinates) {
