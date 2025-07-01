@@ -2,11 +2,9 @@ import { searchFields } from '../config/searchConfig.js';
 
 export const buildSearchQuery = (model, searchTerm) => {
   if (!searchTerm) return [];
-
   const fields = searchFields[model] || [];
   const pipeline = [];
   const matchQueries = [];
-
   fields.forEach((field) => {
     if (field.isRef) {
       pipeline.push(
@@ -25,7 +23,6 @@ export const buildSearchQuery = (model, searchTerm) => {
           },
         }
       );
-
       matchQueries.push({
         [`${field.field}_details.${field.refField}`]: {
           $regex: searchTerm,
@@ -43,6 +40,5 @@ export const buildSearchQuery = (model, searchTerm) => {
       $match: { $or: matchQueries },
     });
   }
-
   return pipeline;
 };

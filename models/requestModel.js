@@ -51,6 +51,10 @@ const requestSchema = new mongoose.Schema({
       type: Date,
     },
   },
+  selected_unit: {
+    type: String,
+    required: true, 
+  },
   quantity: {
     type: Number,
     required: true,

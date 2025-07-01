@@ -1,11 +1,6 @@
 import mongoose from "mongoose";
 
 const priceSchema = new mongoose.Schema({
-  quantity: {
-    type: Number,
-    required: [true, "Quantity is required"],
-    min: [0, "Quantity cannot be negative"],
-  },
   unit: {
     type: String,
     required: [true, "Unit is required"],
@@ -14,6 +9,11 @@ const priceSchema = new mongoose.Schema({
     type: Number,
     required: [true, "Price is required"],
     min: [0, "Price cannot be negative"],
+  },
+  stock_quantity: {
+    type: Number,
+    required: [true, "Stock quantity is required for this unit"],
+    min: [0, "Stock cannot be negative"],
   },
 });
 
@@ -35,11 +35,6 @@ const materialSchema = new mongoose.Schema(
       type: String,
       enum: ["available", "unavailable"],
       default: "available",
-    },
-    stock_quantity: {
-      type: Number,
-      required: [true, "Stock quantity is required"],
-      min: [0, "Stock cannot be negative"],
     },
     photos: [
       {

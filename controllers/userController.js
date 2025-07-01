@@ -21,6 +21,14 @@ export const updateUserProfile = catchAsyncError(async (req, res, next) => {
   const { name, email, phone } = req.body;
   const user = await User.findById(req.user.id);
   if (!user) return next(new ErrorHandler('User not found', 404));
+
+  // check if email or phone is already in use by another user
+  const emailExists = await User.findOne({ email, _id: { $ne: req.user.id } });
+  const phoneExists = await User.findOne({ phone, _id: { $ne: req.user.id } });
+  if (emailExists) return next(new ErrorHandler('Email already linked to another account', 400));
+  if (phoneExists) return next(new ErrorHandler('Phone Number already linked to another account', 400));
+
+
   user.name = name || user.name;
   user.email = email || user.email;
   user.phone = phone || user.phone;

@@ -1,5 +1,5 @@
 import express from 'express';
-import { cancelRequest, getMyRequests, acceptRequest, rejectRequest, editRequest, createRequest } from '../controllers/requestController.js';
+import { cancelRequest, getMyRequests, acceptRequest, rejectRequest, editRequest, createRequest, getRequestById } from '../controllers/requestController.js';
 import { protect, authorizeRoles } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -14,6 +14,6 @@ router.route('/:id/accept').patch(protect, authorizeRoles('mine_owner'), acceptR
 
 router.route('/:id/reject').patch(protect, authorizeRoles('mine_owner'), rejectRequest);
 
-router.route('/:id').patch(protect, editRequest);
+router.route('/:id').patch(protect, editRequest).get(protect, getRequestById);
 
 export default router;

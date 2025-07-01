@@ -6,9 +6,10 @@ import { createNotification } from './notificationController.js';
 
 // Create new request (Truck Owner) -> POST /api/v1/requests
 export const createRequest = catchAsyncError(async (req, res, next) => {
-  const { mine_id, material_id, delivery_method, delivery_location, comments, quantity, price_confirmed } = req.body;
+  console.log("Creating request with body:", req.body);
+  const { mine_id, material_id, delivery_method, delivery_location, comments, selected_unit, quantity, price_confirmed } = req.body;
 
-  if (!mine_id || !material_id || !delivery_method || !delivery_location || !quantity || !price_confirmed) {
+  if (!mine_id || !material_id || !delivery_method || !delivery_location || !selected_unit || !quantity || !price_confirmed) {
     return next(new ErrorHandler('All required fields must be provided', 400));
   }
 
@@ -19,6 +20,7 @@ export const createRequest = catchAsyncError(async (req, res, next) => {
     delivery_method,
     delivery_location,
     comments,
+    selected_unit,
     quantity,
     price_confirmed,
     status: 'pending',
@@ -155,5 +157,29 @@ export const editRequest = catchAsyncError(async (req, res, next) => {
   Object.assign(request, updates);
   await request.save();
 
+  res.status(200).json({ success: true, data: request });
+});
+
+// Get request by ID -> GET /api/v1/requests/:id
+export const getRequestById = catchAsyncError(async (req, res, next) => {
+  const { id } = req.params;
+  
+  const request = await Request.findById(id)
+    .populate('mine_id material_id truck_owner_id');
+  
+  if (!request) {
+    return next(new ErrorHandler('Request not found', 404));
+  }
+  
+  // Check if user has permission to view this request
+  const isTruckOwner = req.user.role === 'truck_owner' && 
+    request.truck_owner_id._id.toString() === req.user._id.toString();
+  const isMineOwner = req.user.role === 'mine_owner' && 
+    req.user.mine_id.includes(request.mine_id._id.toString());
+  
+  if (!isTruckOwner && !isMineOwner) {
+    return next(new ErrorHandler('Unauthorized to view this request', 403));
+  }
+  
   res.status(200).json({ success: true, data: request });
 });
