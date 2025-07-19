@@ -5,9 +5,9 @@ import Request from "../models/requestModel.js";
 import ErrorHandler from "../utils/errorHandler.js";
 import catchAsyncError from "../middleware/catchAsyncError.js";
 import { createNotification } from "./notificationController.js";
+import mongoose from "mongoose";
 
 export const createMaterial = catchAsyncError(async (req, res, next) => {
-  // Explicitly destructure all fields from the schema to avoid errors
   const {
     name,
     mine_id,
@@ -19,7 +19,7 @@ export const createMaterial = catchAsyncError(async (req, res, next) => {
     availability_status
   } = req.body;
 
-  const user_id = req.user.id; // From auth middleware
+  const user_id = req.user.id;
 
   if (!prices || prices.length === 0) {
     return next(new ErrorHandler("At least one price entry is required.", 400));
