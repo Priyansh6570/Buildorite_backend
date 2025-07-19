@@ -1,61 +1,67 @@
 import express from 'express';
-import { 
-  // Material CRUD operations
-  createMaterial, 
-  getAllMaterials, 
-  getMaterialById, 
-  updateMaterial, 
-  deleteMaterial, 
+
+// Import all required controller functions
+import {
+  createMaterial,
+  getAllMaterials,
+  getMaterialById,
+  updateMaterial,
+  deleteMaterial,
   getMaterialsByMineId,
-  searchMaterials,
-  
-  // Unit management
-  getStandardUnits,
-  createCustomUnit,
-  getUserCustomUnits,
-  deleteCustomUnit,
-  
-  // Property management
-  getCommonPropertySuggestions,
-  createCustomProperty,
-  getUserCustomProperties,
-  deleteCustomProperty
 } from '../controllers/materialController.js';
+
+import {
+  createUnit,
+  getAllUnits,
+  getUnitById,
+  getMyUnits,
+  updateUnit,
+  deleteUnit,
+} from '../controllers/unitController.js';
+
+// Import your authentication middleware
+// Make sure the path is correct for your project structure
 import { protect, authorizeRoles } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// Unit management routes
-router.route('/units/standard').get(getStandardUnits);
-router.route('/units/custom')
-  .get(protect, authorizeRoles('mine_owner'), getUserCustomUnits)
-  .post(protect, authorizeRoles('mine_owner'), createCustomUnit);
-router.route('/units/custom/:id')
-  .delete(protect, authorizeRoles('mine_owner'), deleteCustomUnit);
+//===============================
+// Material Routes
+//===============================
 
-// Property management routes
-router.route('/properties/suggestions').get(getCommonPropertySuggestions);
-router.route('/properties/custom')
-  .get(protect, authorizeRoles('mine_owner'), getUserCustomProperties)
-  .post(protect, authorizeRoles('mine_owner'), createCustomProperty);
-router.route('/properties/custom/:id')
-  .delete(protect, authorizeRoles('mine_owner'), deleteCustomProperty);
-
-// Material search
-router.route('/search').get(searchMaterials);
-
-// Main material routes
+// Get all materials and create a new material
 router.route('/')
   .get(getAllMaterials)
   .post(protect, authorizeRoles('mine_owner'), createMaterial);
 
-// Materials by mine
+// Get all materials for a specific mine
 router.route('/mine/:mine_id').get(getMaterialsByMineId);
 
-// Individual material operations
+// Operations on a single material by its ID
 router.route('/:id')
   .get(getMaterialById)
   .put(protect, authorizeRoles('mine_owner'), updateMaterial)
   .delete(protect, authorizeRoles('mine_owner'), deleteMaterial);
+
+
+//===============================
+// Unit Routes
+//===============================
+
+// Get all units and create a new unit
+router.route('/units')
+  .get(getAllUnits)
+  .post(protect, authorizeRoles('mine_owner'), createUnit);
+
+// Get units created by the currently logged-in user
+router.route('/units/my-units')
+  .get(protect, getMyUnits);
+
+// Operations on a single unit by its ID
+router.route('/units/:id')
+  .get(getUnitById)
+  .put(protect, authorizeRoles('mine_owner'), updateUnit)
+  .delete(protect, authorizeRoles('mine_owner'), deleteUnit);
+
 
 export default router;
