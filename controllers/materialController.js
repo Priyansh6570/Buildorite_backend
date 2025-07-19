@@ -6,47 +6,89 @@ import ErrorHandler from "../utils/errorHandler.js";
 import catchAsyncError from "../middleware/catchAsyncError.js";
 import { createNotification } from "./notificationController.js";
 
-/**
- * @route POST /api/v1/materials
- * @desc Create a new material, with on-the-fly unit creation.
- * @access Private
- */
 export const createMaterial = catchAsyncError(async (req, res, next) => {
-  const { name, mine_id, prices, properties, ...otherFields } = req.body;
-  const user_id = req.user.id;
+  // Explicitly destructure all fields from the schema to avoid errors
+  const {
+    name,
+    mine_id,
+    prices,
+    properties,
+    description,
+    tags,
+    photos,
+    availability_status
+  } = req.body;
+
+  const user_id = req.user.id; // From auth middleware
 
   if (!prices || prices.length === 0) {
-    return next(new ErrorHandler("At least one price must be provided.", 400));
+    return next(new ErrorHandler("At least one price entry is required.", 400));
   }
 
-  // Process prices: Create new units if necessary, otherwise use existing ID
+  // Process prices to resolve unit IDs
   const processedPrices = await Promise.all(
     prices.map(async (price) => {
       let unitId;
-      if (typeof price.unit === 'object' && price.unit !== null) {
-        // Create a new unit if an object is provided
-        const newUnit = await Unit.create({ ...price.unit, createdBy: user_id });
-        unitId = newUnit._id;
-      } else {
-        // Use the existing unit ID if a string is provided
-        unitId = price.unit;
+      const unitData = price.unit;
+
+      if (!unitData) {
+        throw new Error('Unit data is missing in one of the price entries.');
       }
-      return { ...price, unit: unitId };
+
+      // Case 1: unitData is an ObjectId string (from an existing DB unit)
+      if (typeof unitData === 'string' && mongoose.Types.ObjectId.isValid(unitData)) {
+        unitId = unitData;
+      }
+      // Case 2: unitData is an object (new custom unit OR predefined unit)
+      else if (typeof unitData === 'object' && unitData !== null) {
+        // Find if a unit with this name already exists to prevent duplicates
+        let existingUnit = await Unit.findOne({ name: unitData.name });
+        if (existingUnit) {
+          unitId = existingUnit._id;
+        } else {
+          // If not found, create it. This works for both new custom units
+          // from the form and predefined units not yet in the DB.
+          const newUnit = await Unit.create({
+            name: unitData.name,
+            type: unitData.type,
+            baseUnit: unitData.baseUnit,
+            multiplier: unitData.multiplier,
+            createdBy: user_id,
+          });
+          unitId = newUnit._id;
+        }
+      } else {
+        // If the format is unrecognized, throw an error.
+        throw new Error(`Invalid unit format received: ${JSON.stringify(unitData)}`);
+      }
+
+      return {
+        price: price.price,
+        stock_quantity: price.stock_quantity,
+        minimum_order_quantity: price.minimum_order_quantity,
+        unit: unitId // Assign the resolved ID
+      };
     })
   );
 
+  // Create the material with all the validated and processed data
   const material = await Material.create({
     name,
     mine_id,
     prices: processedPrices,
     properties,
-    ...otherFields,
+    description,
+    tags,
+    photos,
+    availability_status: availability_status || 'available',
   });
 
+  // Add the new material's ID to the parent mine's list of materials
   await Mine.findByIdAndUpdate(mine_id, { $push: { materials: material._id } });
 
   res.status(201).json({ success: true, material });
 });
+
 
 /**
  * @route GET /api/v1/materials
