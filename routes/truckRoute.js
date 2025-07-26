@@ -1,5 +1,5 @@
 import express from 'express';
-import { createTruck, getMyTruck, getTrucksByOwner, updateTruck, deleteTruck, removeTruck } from '../controllers/truckController.js';
+import { createTruck, getMyTruck, getTrucksByOwner, updateTruck, deleteTruck, removeTruck, getMyDrivers } from '../controllers/truckController.js';
 import { protect, authorizeRoles } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -7,6 +7,8 @@ const router = express.Router();
 router.route('/create-truck').post(protect, authorizeRoles('driver'), createTruck);
 
 router.route('/my-truck').get(protect, authorizeRoles('driver'), getMyTruck);
+
+router.route('/my-drivers').get(protect, authorizeRoles('truck_owner, mine_owner'), getMyDrivers);
 
 router.route('/trucks-by-owner').get(protect, authorizeRoles('truck_owner'), getTrucksByOwner);
 

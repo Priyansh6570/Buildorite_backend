@@ -12,7 +12,7 @@ export const applyQuery = (Model) => {
       let query = Model.find(filters);
       buildQuery(query, { page, limit, sortBy, order, userCoordinates });
       const results = await query.exec();
-      const totalCount = await Model.countDocuments(filters);
+      const totalCount = await Model.countDocuments();
       const totalPages = Math.ceil(totalCount / (parseInt(limit) || 10));
       res.status(200).json({
         success: true,

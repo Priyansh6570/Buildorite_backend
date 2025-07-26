@@ -1,5 +1,6 @@
 import Material from "../models/materialModel.js";
 import Unit from "../models/unitModel.js";
+import User from "../models/userModel.js";
 import ErrorHandler from "../utils/errorHandler.js";
 import catchAsyncError from "../middleware/catchAsyncError.js";
 
@@ -16,8 +17,15 @@ export const createUnit = catchAsyncError(async (req, res, next) => {
     baseUnit,
     multiplier,
     description,
-    createdBy: req.user.id,
   });
+
+  await User.findByIdAndUpdate(
+    req.user.id,
+    {
+      $push: { created_unit_ids: unit._id },
+    },
+    { new: true, runValidators: true }
+  );
   res.status(201).json({ success: true, unit });
 });
 
@@ -49,8 +57,12 @@ export const getUnitById = catchAsyncError(async (req, res, next) => {
  * @access Private
  */
 export const getMyUnits = catchAsyncError(async (req, res, next) => {
-  const units = await Unit.find({ createdBy: req.user.id });
-
+  const user = await User.findById(req.user.id).populate("created_unit_ids");
+  if (!user) return next(new ErrorHandler("User not found", 404));
+  const units = user.created_unit_ids;
+  if (!units || units.length === 0) {
+    return res.status(200).json({ success: true, count: 0, units: [] });
+  }
   res.status(200).json({
     success: true,
     count: units.length,

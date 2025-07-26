@@ -6,8 +6,11 @@ export const searchFields = {
     ],
     material: [
       { field: 'name', isRef: false },
-      { field: 'mine_id', isRef: true, refField: 'name', refModel: 'Mine' },
-      { field: 'mine_id', isRef: true, refField: 'location.address', refModel: 'Mine' },
+      { 
+      ref: 'mine_id', 
+      refModel: 'Mine',
+      fields: ['name', 'location.address'] 
+    },
     ],
     user: [
       { field: 'name', isRef: false },

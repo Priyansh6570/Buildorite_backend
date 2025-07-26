@@ -12,6 +12,7 @@ const userSchema = new mongoose.Schema({
   email: {
     type: String,
     trim: true,
+    sparse: true,
     unique: true,
     validator: [isEmail, "Please enter a valid email address"],
   },
@@ -28,6 +29,10 @@ const userSchema = new mongoose.Schema({
     enum: ["mine_owner", "truck_owner", "driver", "admin"],
     required: true,
   },
+  isRegistered: {
+    type: Boolean,
+    default: false,
+  },
   wallet_balance: {
     type: Number,
     default: 0,
@@ -37,15 +42,27 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: "Mine",
   }],
-  truck_ids: [
+  driver_ids: [
     {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Truck",
+      ref: "User",
     },
   ],
+  truck_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Truck",
+  },
+  owner_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+  },
   assigned_trip_id: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: "Trip",
+  }],
+  created_unit_ids: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Unit",
   }],
   createdAt: {
     type: Date,

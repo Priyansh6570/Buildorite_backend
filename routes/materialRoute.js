@@ -49,9 +49,9 @@ router.route('/:id')
 //===============================
 
 // Get all units and create a new unit
-router.route('/units')
-  .get(getAllUnits)
-  .post(protect, authorizeRoles('mine_owner'), createUnit);
+router.route('/units/d')
+  .get(protect, getAllUnits)
+  .post(protect, createUnit);
 
 // Get units created by the currently logged-in user
 router.route('/units/my-units')

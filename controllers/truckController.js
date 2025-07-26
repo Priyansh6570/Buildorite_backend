@@ -16,6 +16,8 @@ export const createTruck = catchAsyncError(async (req, res, next) => {
       driver_id,
     });
 
+    await User.findByIdAndUpdate(driver_id, { truck_id: truck._id });
+
     res.status(201).json({ success: true, data: truck });
   } catch (error) {
     next(error);
@@ -36,6 +38,30 @@ export const getMyTruck = catchAsyncError(async (req, res, next) => {
   }
 });
   
+// Get all drivers of the owner -> /my-drivers
+export const getMyDrivers = catchAsyncError(async (req, res, next) => {
+  console.log('Fetching my drivers...');
+  try {
+    const ownerId = req.user._id;
+
+    const owner = await User.findById(ownerId).populate({
+      path: 'driver_ids',
+      populate: {
+        path: 'truck_id',
+      },
+    });
+
+    if (!owner) return next(new ErrorHandler('Owner not found', 404));
+
+    res.status(200).json({
+      success: true,
+      data: owner.driver_ids,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Get all trucks for a specific truck owner -> /trucks-by-owner
 export const getTrucksByOwner = catchAsyncError(async (req, res, next) => {
   try {
