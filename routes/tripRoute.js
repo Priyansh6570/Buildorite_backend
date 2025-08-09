@@ -1,15 +1,19 @@
-import express from 'express';
-import { createTrip, getMyTrips, updateMilestone, updateTripStatus, viewTrip } from '../controllers/tripController.js';
-import { protect, authorizeRoles } from '../middleware/authMiddleware.js';
+import express from "express";
+import { getMyTrips, getTripById, updateMilestone, verifyMilestone, updateLiveLocation, reportIssue } from "../controllers/tripController.js";
+import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-router.route('/').post(protect, authorizeRoles('truck_owner', 'mine_owner'), createTrip).get(protect, getMyTrips);
+router.route("/").get(protect, getMyTrips);
 
-router.route('/:id').get(protect, viewTrip);
+router.route("/:id").get(protect, getTripById);
 
-router.route('/:id/milestone').put(protect, authorizeRoles('driver'), updateMilestone);
+router.route("/:id/milestone").patch(protect, authorizeRoles("driver"), updateMilestone);
 
-router.route('/:id/status').put(protect, authorizeRoles('truck_owner', 'mine_owner'), updateTripStatus);
+router.route("/:id/verify").patch(protect, authorizeRoles("truck_owner", "mine_owner"), verifyMilestone);
+
+router.route("/:id/location").patch(protect, authorizeRoles("driver"), updateLiveLocation);
+
+router.route("/:id/report-issue").patch(protect, authorizeRoles("driver"), reportIssue);
 
 export default router;

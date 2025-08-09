@@ -33,8 +33,8 @@ app.use('/api/v1/material', materialRoute);
 app.use('/api/v1/search', searchRoute);
 app.use('/api/v1/connection', connectionRoute);
 app.use('/api/v1/truck', truckRoute);
-app.use('/api/v1/trip', tripRoute);
-app.use('/api/v1/request', requestRoute);
+app.use('/api/v1/trips', tripRoute);
+app.use('/api/v1/requests', requestRoute);
 app.use('/api/v1/notifications', notificationRoute);
 
 // Serve static files if in production

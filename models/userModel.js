@@ -20,9 +20,7 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: [true, "Phone number is required"],
     unique: true,
-    validator: [
-      isMobilePhone, "Please enter a valid phone number",
-    ],
+    validator: [isMobilePhone, "Please enter a valid phone number"],
   },
   role: {
     type: String,
@@ -38,10 +36,12 @@ const userSchema = new mongoose.Schema({
     default: 0,
     min: [0, "Wallet balance cannot be negative"],
   },
-  mine_id: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Mine",
-  }],
+  mine_id: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Mine",
+    },
+  ],
   driver_ids: [
     {
       type: mongoose.Schema.Types.ObjectId,
@@ -56,14 +56,21 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
   },
-  assigned_trip_id: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Trip",
-  }],
-  created_unit_ids: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Unit",
-  }],
+  assigned_trip_id: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Trip",
+    },
+  ],
+  created_unit_ids: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Unit",
+    },
+  ],
+  pushToken: {
+    type: String,
+  },
   createdAt: {
     type: Date,
     default: Date.now,

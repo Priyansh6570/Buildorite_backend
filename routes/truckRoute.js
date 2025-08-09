@@ -8,7 +8,7 @@ router.route('/create-truck').post(protect, authorizeRoles('driver'), createTruc
 
 router.route('/my-truck').get(protect, authorizeRoles('driver'), getMyTruck);
 
-router.route('/my-drivers').get(protect, authorizeRoles('truck_owner, mine_owner'), getMyDrivers);
+router.route('/my-drivers').get(protect, getMyDrivers);
 
 router.route('/trucks-by-owner').get(protect, authorizeRoles('truck_owner'), getTrucksByOwner);
 

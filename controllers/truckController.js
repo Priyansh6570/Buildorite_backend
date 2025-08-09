@@ -40,22 +40,45 @@ export const getMyTruck = catchAsyncError(async (req, res, next) => {
   
 // Get all drivers of the owner -> /my-drivers
 export const getMyDrivers = catchAsyncError(async (req, res, next) => {
-  console.log('Fetching my drivers...');
   try {
-    const ownerId = req.user._id;
-
-    const owner = await User.findById(ownerId).populate({
+    const owner = await User.findById(req.user._id).populate({
       path: 'driver_ids',
-      populate: {
-        path: 'truck_id',
-      },
+      populate: [
+        { path: 'truck_id' },
+        {
+          path: 'assigned_trip_id',
+          populate: {
+            path: 'request_id',
+            select: 'finalized_agreement.schedule',
+          },
+        },
+      ],
     });
 
     if (!owner) return next(new ErrorHandler('Owner not found', 404));
 
+    const minimalDrivers = owner.driver_ids.map((d) => {
+      const trip = d.assigned_trip_id?.[0];
+      const schedule = trip?.request_id?.finalized_agreement?.schedule || null;
+
+      return {
+        _id: d._id,
+        name: d.name,
+        email: d.email,
+        phone: d.phone,
+        isRegistered: d.isRegistered,
+        truck: {
+          _id: d.truck_id?._id,
+          name: d.truck_id?.name,
+          reg: d.truck_id?.registration_number,
+        },
+        schedule,
+      };
+    });
+
     res.status(200).json({
       success: true,
-      data: owner.driver_ids,
+      data: minimalDrivers,
     });
   } catch (error) {
     next(error);

@@ -112,13 +112,86 @@ export const getMaterialsByMineId = catchAsyncError(async (req, res, next) => {
 });
 
 export const updateMaterial = catchAsyncError(async (req, res, next) => {
+  const {
+    name,
+    mine_id,
+    prices,
+    properties,
+    description,
+    tags,
+    photos,
+    availability_status
+  } = req.body;
+
+  const user_id = req.user.id;
+
   let material = await Material.findById(req.params.id);
   if (!material) return next(new ErrorHandler("Material not found", 404));
 
-  material = await Material.findByIdAndUpdate(req.params.id, req.body, {
-    new: true,
-    runValidators: true,
-  });
+  let processedPrices = [];
+
+  if (prices && prices.length > 0) {
+    processedPrices = await Promise.all(
+      prices.map(async (price) => {
+        let unitId;
+        const unitData = price.unit;
+
+        if (!unitData) throw new Error('Unit data missing');
+
+        if (typeof unitData === 'string' && mongoose.Types.ObjectId.isValid(unitData)) {
+          unitId = unitData;
+        } else if (typeof unitData === 'object' && unitData !== null) {
+          let existingUnit = await Unit.findOne({ name: unitData.name });
+
+          if (existingUnit) {
+            unitId = existingUnit._id;
+            const user = await User.findById(user_id);
+            if (!user.created_unit_ids.includes(unitId)) {
+              await User.findByIdAndUpdate(user_id, { $push: { created_unit_ids: unitId } });
+            }
+          } else {
+            const newUnit = await Unit.create({
+              name: unitData.name,
+              type: unitData.type,
+              baseUnit: unitData.baseUnit,
+              multiplier: unitData.multiplier,
+            });
+            unitId = newUnit._id;
+            await User.findByIdAndUpdate(user_id, { $push: { created_unit_ids: unitId } });
+          }
+        } else {
+          throw new Error(`Invalid unit format: ${JSON.stringify(unitData)}`);
+        }
+
+        console.log(`Processed price for unit: ${unitId}`);
+
+        return {
+          price: price.price,
+          stock_quantity: price.stock_quantity,
+          minimum_order_quantity: price.minimum_order_quantity,
+          unit: unitId
+        };
+      })
+    );
+  }
+
+  material = await Material.findByIdAndUpdate(
+    req.params.id,
+    {
+      name,
+      mine_id,
+      prices: processedPrices.length > 0 ? processedPrices : material.prices,
+      properties,
+      description,
+      tags,
+      photos,
+      availability_status: availability_status || material.availability_status
+    },
+    {
+      new: true,
+      runValidators: true,
+    }
+  );
 
   res.status(200).json({ success: true, material });
 });
