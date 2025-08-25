@@ -36,7 +36,8 @@ const requestSchema = new mongoose.Schema({
   material_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Material', required: true },
   truck_owner_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   truck_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Truck' },
-  
+  trip_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Trip' },
+
   driver_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 
   status: {

@@ -1,4 +1,5 @@
 import Material from "../models/materialModel.js";
+import MaterialView from "../models/materialViewModel.js";
 import Unit from "../models/unitModel.js";
 import User from "../models/userModel.js";
 import Mine from "../models/mineModel.js";
@@ -208,8 +209,6 @@ export const deleteMaterial = catchAsyncError(async (req, res, next) => {
         request.status = "canceled";
         request.rejection_reason = "Material has been removed by Mine Owner.";
         await request.save();
-        // Send notifications
-        await createNotification({ /* ... */ });
       }
     }
   }
@@ -220,4 +219,25 @@ export const deleteMaterial = catchAsyncError(async (req, res, next) => {
   await material.deleteOne();
 
   res.status(200).json({ success: true, message: "Material deleted successfully" });
+});
+
+export const addMaterialView = catchAsyncError(async (req, res, next) => {
+  const { id: materialId } = req.params;
+  const userId = req.user._id;
+
+  console.log(`Adding view for material ${materialId} by user ${userId}`);
+
+  const existing = await MaterialView.findOne({ user_id: userId, material_id: materialId });
+
+  if (!existing || Date.now() - existing.last_viewed.getTime() > 12 * 60 * 60 * 1000) {
+    await MaterialView.findOneAndUpdate(
+      { user_id: userId, material_id: materialId },
+      { last_viewed: new Date() },
+      { upsert: true }
+    );
+
+    await Material.findByIdAndUpdate(materialId, { $inc: { views: 1 } });
+  }
+
+  res.json({ success: true });
 });

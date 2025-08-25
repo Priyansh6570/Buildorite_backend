@@ -64,6 +64,98 @@ export const getMyMines = catchAsyncError(async (req, res, next) => {
   });
 });
 
+
+// get count of mine and material
+export const getMineAndMaterialCount = catchAsyncError(async (req, res, next) => {
+  const [result] = await User.aggregate([
+    { $match: { _id: req.user._id } },
+    {
+      $lookup: {
+        from: "mines",
+        localField: "mine_id",
+        foreignField: "_id",
+        as: "mines"
+      }
+    },
+    { $unwind: "$mines" },
+    {
+      $lookup: {
+        from: "materials",
+        localField: "mines._id",
+        foreignField: "mine_id",
+        as: "mineMaterials"
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        mineCount: { $addToSet: "$mines._id" },
+        materialCount: { $sum: { $size: "$mineMaterials" } }
+      }
+    },
+    {
+      $project: {
+        mineCount: { $size: "$mineCount" },
+        materialCount: 1
+      }
+    }
+  ]);
+
+  res.status(200).json({
+    success: true,
+    mineCount: result?.mineCount || 0,
+    materialCount: result?.materialCount || 0
+  });
+});
+
+// Get global mine and material count
+export const getGlobalMineAndMaterialCount = catchAsyncError(async (req, res, next) => {
+  const [mineCount, materialCount] = await Promise.all([
+    Mine.countDocuments(),
+    Material.countDocuments()
+  ]);
+
+  res.status(200).json({
+    success: true,
+    mineCount,
+    materialCount
+  });
+});
+
+export const getTruckOwnerDriverStats = catchAsyncError(async (req, res, next) => {
+  try {
+    const truckOwnerId = req.user._id;
+    const driverCount = await User.countDocuments({
+      role: "driver",
+      owner_id: truckOwnerId,
+      truck_id: { $ne: null },
+    });
+
+    const userWithTrucks = await User.findById(truckOwnerId).populate("driver_ids", "truck_id");
+    const truckIds = userWithTrucks?.driver_ids?.map(d => d.truck_id).filter(Boolean) || [];
+
+    const completedTripCount = await Trip.countDocuments({
+      truck_id: { $in: truckIds },
+      status: "completed",
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        driverCount,
+        completedTripCount,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching truck owner driver stats:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+});
+
+
 // Update mine -> api/v1/mine/mines/:id (Mine Owner only)
 export const updateMine = catchAsyncError(async (req, res, next) => {
   let mine = await Mine.findById(req.params.id);

@@ -62,7 +62,7 @@ const tripSchema = new mongoose.Schema({
 
     issue: {
         reported_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-        reason: { type: String, enum: ['accident', 'vehicle_breakdown', 'unable_to_load', 'delivery_issue'] },
+        reason: { type: String, enum: ['accident', 'vehicle_breakdown', 'unable_to_load', 'delivery_issue', 'other'] },
         notes: { type: String },
         timestamp: { type: Date },
     },

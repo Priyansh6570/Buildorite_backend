@@ -1,40 +1,57 @@
-import { applyQuery } from "../middleware/queryMiddleware.js";
-import { sendNotification } from "../server.js";
 import Notification from "../models/notificationModel.js";
+import User from "../models/userModel.js";
 import catchAsyncError from "../middleware/catchAsyncError.js";
+import { Expo } from "expo-server-sdk";
+const expo = new Expo();
 
-// Create new notification (to be called within other controllers)
-export const createNotification = async ({ recipient_id, type, message, related_request_id = null, related_trip_id = null }) => {
-  try {
-    const notification = await Notification.create({
-      recipient_id,
-      type,
-      message,
-      related_request_id,
-      related_trip_id,
-    });
+export const createNotification = async ({ recipient_id, type, title, message, payload = {} }) => {
+  const n = await Notification.create({
+    recipient_id,
+    type,
+    title,
+    message,
+    payload,
+  });
 
-    sendNotification(recipient_id.toString(), {
-      _id: notification._id,
-      type,
-      message,
-      related_request_id,
-      related_trip_id,
-      createdAt: notification.createdAt,
-      isRead: Notification.is_read,
-    });
-
-  } catch (err) {
-    console.error('Error creating notification:', err.message);
+  const u = await User.findById(recipient_id).select("pushToken");
+  if (u?.pushToken && Expo.isExpoPushToken(u.pushToken)) {
+    const msg = {
+      to: u.pushToken,
+      title,
+      body: message,
+      data: {
+        type,
+        payload, 
+        notification_id: n._id.toString(),
+      },
+      priority: "high",
+    };
+    await expo.sendPushNotificationsAsync([msg]);
   }
+
+  return n;
 };
 
-// Get notifications -> GET /api/v1/notifications
-export const getNotifications = applyQuery(Notification);
+export const getNotifications = catchAsyncError(async (req, res) => {
+  const { cursor, limit = 20 } = req.query;
+  const q = { recipient_id: req.user._id };
+  if (cursor) q.createdAt = { $lt: new Date(cursor) };
+  const list = await Notification.find(q).sort({ createdAt: -1 }).limit(+limit);
+  res.json({ list, nextCursor: list.at(-1)?.createdAt ?? null });
+});
 
-// Mark as read -> PATCH /api/v1/notifications/:id
-export const markAsRead = catchAsyncError(async (req, res, next) => {
+export const markAsRead = catchAsyncError(async (req, res) => {
   const { id } = req.params;
-  await Notification.findByIdAndUpdate(id, { is_read: true });
-  res.status(200).json({ success: true, message: "Notification marked as read" });
+  await Notification.updateOne({ _id: id, recipient_id: req.user._id }, { is_read: true, read_at: new Date() });
+  res.json({ success: true });
+});
+
+export const markAllAsRead = catchAsyncError(async (req, res) => {
+  await Notification.updateMany({ recipient_id: req.user._id, is_read: false }, { is_read: true, read_at: new Date() });
+  res.json({ success: true });
+});
+
+export const unreadCount = catchAsyncError(async (req, res) => {
+  const c = await Notification.countDocuments({ recipient_id: req.user._id, is_read: false });
+  res.json({ count: c });
 });

@@ -85,6 +85,8 @@ export const getMyDrivers = catchAsyncError(async (req, res, next) => {
   }
 });
 
+// get driver by id with trip details 
+
 // Get all trucks for a specific truck owner -> /trucks-by-owner
 export const getTrucksByOwner = catchAsyncError(async (req, res, next) => {
   try {
@@ -94,6 +96,51 @@ export const getTrucksByOwner = catchAsyncError(async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+export const getDriverDetails = catchAsyncError(async (req, res, next) => {
+    try {
+        const { driverId } = req.params;
+
+        if (!driverId) {
+            return next(new ErrorHandler('Driver ID is required', 400));
+        }
+        const driverDetails = await User.findById(driverId)
+            .select('name phone truck_id assigned_trip_id')
+            .populate({
+                path: 'truck_id',
+                select: 'name registration_number',
+            })
+            .populate({
+                path: 'assigned_trip_id',
+                select: 'started_at status milestone_history destination request_id',
+                populate: {
+                    path: 'request_id',
+                    select: 'mine_id material_id finalized_agreement.quantity',
+                    populate: [
+                        {
+                            path: 'mine_id',
+                            select: 'name location',
+                        },
+                        {
+                            path: 'material_id',
+                            select: 'name',
+                        },
+                    ],
+                },
+            })
+            .lean();
+
+        if (!driverDetails) {
+            return next(new ErrorHandler('Driver not found', 404));
+        }
+        console.log('Driver details fetched successfully:', driverDetails);
+        res.status(200).json(driverDetails);
+
+    } catch (error) {
+        console.error('Error fetching driver details:', error);
+        res.status(500).json({ message: 'Server error while fetching driver details.' });
+    }
 });
 
 // Update truck details -> /truck/:id

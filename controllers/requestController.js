@@ -1,5 +1,6 @@
 import Request from "../models/requestModel.js";
 import Mine from "../models/mineModel.js";
+import Material from "../models/materialModel.js"
 import Truck from "../models/truckModel.js";
 import User from "../models/userModel.js";
 import Trip from "../models/tripModel.js";
@@ -15,8 +16,6 @@ import { createNotification } from "./notificationController.js";
  */
 export const createRequest = catchAsyncError(async (req, res, next) => {
   const { mine_id, material_id, truck_id, proposal } = req.body;
-
-  console.log(mine_id, material_id, truck_id);
 
   if (
     !mine_id ||
@@ -48,7 +47,7 @@ export const createRequest = catchAsyncError(async (req, res, next) => {
     history: [
       {
         by: "buyer",
-        proposal: proposal,
+        proposal,
         timestamp: new Date(),
       },
     ],
@@ -58,14 +57,23 @@ export const createRequest = catchAsyncError(async (req, res, next) => {
     $push: { requests: newRequest._id },
   });
 
-  // Find the mine owner to send a notification
-  const mine = await Mine.findById(mine_id).populate("owner_id");
-  if (mine && mine.owner_id) {
+  await Material.findByIdAndUpdate(material_id, {
+    $inc: { orders_count: 1 },
+  });
+
+  // 👉 notify mine owner with material name
+  const mine = await Mine.findById(mine_id).select("owner_id name");
+  const material = await Material.findById(material_id).select("name");
+
+  if (mine?.owner_id && material) {
     await createNotification({
-      recipient_id: mine.owner_id._id,
-      type: "request_created",
-      message: `New material request from ${req.user.name}.`,
-      related_request_id: newRequest._id,
+      recipient_id: mine.owner_id,
+      type: "mine_request_created",
+      title: "New Material Request",
+      message: `You received a new request for ${material.name}.`,
+      payload: {
+        requestId: newRequest._id.toString(),
+      },
     });
   }
 
@@ -75,6 +83,7 @@ export const createRequest = catchAsyncError(async (req, res, next) => {
     data: newRequest,
   });
 });
+
 
 /**
  * @route   GET /api/v1/requests
@@ -107,6 +116,20 @@ export const getMyRequests = catchAsyncError(async (req, res, next) => {
   });
 });
 
+// get count of all requests
+/**
+ * @route   GET /api/v1/requests/count
+ * @desc    Get count of all requests
+ * @access  Private
+ */
+export const getRequestCount = catchAsyncError(async (req, res, next) => {
+  const count = await Request.countDocuments();
+  res.status(200).json({
+    success: true,
+    count,
+  });
+});
+
 /**
  * @route   GET /api/v1/requests/:id
  * @desc    Get a single request by its ID
@@ -114,7 +137,14 @@ export const getMyRequests = catchAsyncError(async (req, res, next) => {
  */
 export const getRequestById = catchAsyncError(async (req, res, next) => {
   const request = await Request.findById(req.params.id)
-    .populate("mine_id", "name owner_id location")
+     .populate({
+    path: "mine_id",
+    select: "name location owner_id",
+    populate: {
+      path: "owner_id",
+      select: "name phone",
+    },
+  })
     .populate({
       path: "material_id",
       select: "name",
@@ -122,7 +152,7 @@ export const getRequestById = catchAsyncError(async (req, res, next) => {
         path: "prices.unit",
       },
     })
-    .populate("truck_owner_id", "name")
+    .populate("truck_owner_id", "name phone")
     .populate("driver_id", "name phone")
     .populate({
       path: "history.proposal",
@@ -168,66 +198,57 @@ export const submitProposal = catchAsyncError(async (req, res, next) => {
     return next(new ErrorHandler("Proposal data is required", 400));
   }
 
-  const request = await Request.findById(req.params.id);
+  const request = await Request.findById(req.params.id)
+    .populate("mine_id", "owner_id name")
+    .populate("material_id", "name");
   if (!request) {
     return next(new ErrorHandler("Request not found", 404));
   }
 
-  if (
-    ["accepted", "rejected", "canceled", "completed"].includes(request.status)
-  ) {
-    return next(
-      new ErrorHandler(
-        `Cannot submit a proposal for a request that is already ${request.status}`,
-        400
-      )
-    );
+  if (["accepted", "rejected", "canceled", "completed"].includes(request.status)) {
+    return next(new ErrorHandler(
+      `Cannot submit a proposal for a request that is already ${request.status}`, 400
+    ));
   }
 
   let currentUserRole;
-  if (
-    req.user.mine_id &&
-    req.user.mine_id.includes(request.mine_id.toString())
-  ) {
+  if (req.user.mine_id && req.user.mine_id.includes(request.mine_id._id.toString())) {
     currentUserRole = "seller";
   } else if (req.user._id.toString() === request.truck_owner_id.toString()) {
     currentUserRole = "buyer";
   } else {
-    return next(
-      new ErrorHandler("You are not authorized to act on this request.", 403)
-    );
-  } 
-  if (request.last_updated_by === currentUserRole) {
-    return next(
-      new ErrorHandler(
-        "You cannot counter your own proposal. Wait for the other party to respond.",
-        400
-      )
-    );
+    return next(new ErrorHandler("You are not authorized to act on this request.", 403));
   }
 
-  
+  if (request.last_updated_by === currentUserRole) {
+    return next(new ErrorHandler("You cannot counter your own proposal. Wait for the other party to respond.", 400));
+  }
+
   request.current_proposal = proposal;
   request.status = "countered";
   request.last_updated_by = currentUserRole;
-  
+
   request.history.push({
     by: request.last_updated_by,
     proposal: request.current_proposal,
     timestamp: new Date(),
   });
-  
+
   await request.save();
 
-  const recipient_id =
-    currentUserRole === "buyer"
-      ? request.mine_id.owner_id
-      : request.truck_owner_id;
+  // ✅ Correct recipient selection
+  const recipient_id = currentUserRole === "buyer"
+    ? request.mine_id.owner_id
+    : request.truck_owner_id;
+
   await createNotification({
     recipient_id,
-    type: "proposal_updated",
-    message: `You have a new proposal from ${req.user.name}.`,
-    related_request_id: request._id,
+    type: "request_countered",
+    title: `New Proposal from ${req.user.name}`,
+    message: `Counter Proposal for ${request.material_id.name} from ${req.user.name}`,
+    payload: {
+      requestId: request._id.toString(),
+    },
   });
 
   res.status(200).json({
@@ -236,6 +257,7 @@ export const submitProposal = catchAsyncError(async (req, res, next) => {
     data: request,
   });
 });
+
 
 /**
  * @route   PATCH /api/v1/requests/:id/status
@@ -255,10 +277,9 @@ export const updateRequestStatus = catchAsyncError(async (req, res, next) => {
     );
   }
 
-  const request = await Request.findById(req.params.id).populate(
-    "mine_id",
-    "owner_id"
-  );
+  const request = await Request.findById(req.params.id)
+    .populate("mine_id", "owner_id")
+    .populate("material_id", "name");
   if (!request) {
     return next(new ErrorHandler("Request not found", 404));
   }
@@ -274,8 +295,10 @@ export const updateRequestStatus = catchAsyncError(async (req, res, next) => {
     );
   }
 
- const userRole = ["mine_owner", "admin"].includes(req.user.role) ? "seller" : "buyer";
-  console.log("User Role:", userRole);
+  const userRole = ["mine_owner", "admin"].includes(req.user.role)
+    ? "seller"
+    : "buyer";
+
   let notificationMessage = "";
   let recipient_id;
 
@@ -287,21 +310,32 @@ export const updateRequestStatus = catchAsyncError(async (req, res, next) => {
         );
       }
       request.finalized_agreement = request.current_proposal;
-      notificationMessage = `Your request has been accepted by ${req.user.name}!`;
+      notificationMessage = `Your request for ${request.material_id.name} has been accepted by ${req.user.name}!`;
+      // recipient = opposite party
+      recipient_id =
+        userRole === "seller"
+          ? request.truck_owner_id
+          : request.mine_id.owner_id;
       break;
+
     case "rejected":
       request.rejection_reason = reason;
-      notificationMessage = `Your request was rejected by ${req.user.name}.`;
+      notificationMessage = `Your request for ${request.material_id.name} was rejected by ${req.user.name}.`;
+      recipient_id =
+        userRole === "seller"
+          ? request.truck_owner_id
+          : request.mine_id.owner_id;
       break;
+
     case "canceled":
-      // Typically, only the buyer can cancel before acceptance.
       if (userRole !== "buyer") {
         return next(
           new ErrorHandler("Only the truck owner can cancel the request.", 403)
         );
       }
       request.cancellation_reason = reason;
-      notificationMessage = `A request was canceled by ${req.user.name}.`;
+      notificationMessage = `The request for ${request.material_id.name} was canceled by ${req.user.name}.`;
+      recipient_id = request.mine_id.owner_id;
       break;
   }
 
@@ -309,15 +343,48 @@ export const updateRequestStatus = catchAsyncError(async (req, res, next) => {
   request.last_updated_by = userRole;
   await request.save();
 
-  // Notify the other party
-  recipient_id =
-    userRole === "buyer" ? request.mine_id.owner_id : request.truck_owner_id;
-  await createNotification({
-    recipient_id,
-    type: `request_${status}`,
-    message: notificationMessage,
-    related_request_id: request._id,
-  });
+  // update related trips if rejected/canceled
+  if (["rejected", "canceled"].includes(status) && request.trip_id) {
+    const reasonMsg =
+      status === "rejected"
+        ? `Truck owner (${req.user.name}) rejected the request: ${
+            reason || "no reason"
+          }`
+        : `Mine owner (${req.user.name}) canceled the request: ${
+            reason || "no reason"
+          }`;
+
+    await Trip.updateMany(
+      { request_id: request._id },
+      {
+        $set: {
+          status: "canceled",
+          cancel_reason: reasonMsg,
+          completed_at: new Date(),
+        },
+        $push: {
+          milestone_history: {
+            status: "canceled",
+            timestamp: new Date(),
+            location: undefined,
+          },
+        },
+      }
+    );
+  }
+
+  // 👉 send notification if recipient determined
+  if (recipient_id) {
+    await createNotification({
+      recipient_id,
+      type: `request_${status}`,
+      title: `Request ${status}`,
+      message: notificationMessage,
+      payload: {
+        requestId: request._id.toString(),
+      },
+    });
+  }
 
   res.status(200).json({
     success: true,
@@ -332,100 +399,145 @@ export const updateRequestStatus = catchAsyncError(async (req, res, next) => {
  * @access  Private
  */
 export const assignDriver = catchAsyncError(async (req, res, next) => {
-    const { driver_id: newDriverId } = req.body;
-    if (!newDriverId) {
-        return next(new ErrorHandler("Driver ID is required.", 400));
-    }
+  const { driver_id: newDriverId } = req.body;
+  if (!newDriverId) {
+    return next(new ErrorHandler("Driver ID is required.", 400));
+  }
 
-    const request = await Request.findById(req.params.id);
-    if (!request) {
-        return next(new ErrorHandler("Request not found.", 404));
-    }
+  const request = await Request.findById(req.params.id)
+    .populate("mine_id", "owner_id")
+    .populate("material_id", "name");
+  if (!request) {
+    return next(new ErrorHandler("Request not found", 404));
+  }
 
-    // Allow assignment only if the request is 'accepted' or already 'in_progress' (for re-assignment)
-    if (request.status !== "accepted" && request.status !== "in_progress") {
-        return next(
-            new ErrorHandler(
-                `Cannot assign driver. Request status is '${request.status}'`,
-                400
-            )
-        );
-    }
+  if (request.status !== "accepted" && request.status !== "in_progress") {
+    return next(
+      new ErrorHandler(
+        `Cannot assign driver. Request status is '${request.status}'`,
+        400
+      )
+    );
+  }
 
-    // --- Authorization Checks ---
-    const { delivery_method } = request.finalized_agreement;
-    const isMineOwner = req.user.mine_id.includes(request.mine_id.toString());
-    const isTruckOwner = req.user._id.toString() === request.truck_owner_id.toString();
+  const { delivery_method } = request.finalized_agreement;
+  let isMineOwner = req.user.mine_id.includes(request.mine_id.toString());
+  // if admin then isMineOwner = true
+  isMineOwner = req.user.role === "admin" || isMineOwner;
+  const isTruckOwner =
+    req.user._id.toString() === request.truck_owner_id.toString();
 
-    if (delivery_method === "delivery" && !isMineOwner) {
-        return next(new ErrorHandler("Only the mine owner can assign a driver for delivery.", 403));
-    }
-    if (delivery_method === "pickup" && !isTruckOwner) {
-        return next(new ErrorHandler("Only the truck owner can assign a driver for pickup.", 403));
-    }
+  if (delivery_method === "delivery" && !isMineOwner) {
+    return next(
+      new ErrorHandler(
+        "Only the mine owner can assign a driver for delivery.",
+        403
+      )
+    );
+  }
+  if (delivery_method === "pickup" && !isTruckOwner) {
+    return next(
+      new ErrorHandler(
+        "Only the truck owner can assign a driver for pickup.",
+        403
+      )
+    );
+  }
 
-    const oldDriverId = request.driver_id;
+  const oldDriverId = request.driver_id;
 
-    // Prevent re-assigning the same driver
-    if (oldDriverId && oldDriverId.toString() === newDriverId.toString()) {
-        return next(new ErrorHandler("This driver is already assigned to the request.", 400));
-    }
+  if (oldDriverId && oldDriverId.toString() === newDriverId.toString()) {
+    return next(
+      new ErrorHandler("This driver is already assigned to the request.", 400)
+    );
+  }
 
-    // --- Main Logic for Assignment/Re-assignment ---
-    try {
-        // If a driver was already assigned, handle the cleanup of the old trip
-        if (oldDriverId) {
-            console.log(`Re-assigning driver. Old driver ID: ${oldDriverId}`);
-            const oldTrip = await Trip.findOne({ request_id: request._id, driver_id: oldDriverId, status: 'active' });
-            
-            if (oldTrip) {
-                oldTrip.status = 'canceled';
-                oldTrip.cancel_reason = 'Driver was re-assigned by the owner.';
-                await oldTrip.save();
+  try {
+    if (oldDriverId) {
+      // 🔄 Re-assignment branch
+      console.log(`Re-assigning driver. Old driver ID: ${oldDriverId}`);
+      const oldTrip = await Trip.findOne({
+        request_id: request._id,
+        driver_id: oldDriverId,
+        status: "active",
+      });
 
-                // Free up the old driver's truck
-                const oldDriver = await User.findById(oldDriverId);
-                if (oldDriver && oldDriver.truck_id) {
-                    await Truck.findByIdAndUpdate(oldDriver.truck_id, { status: 'idle', $unset: { assigned_trip_id: 1 } });
-                }
-                // Remove the old trip from the driver's assignments
-                await User.findByIdAndUpdate(oldDriverId, { $pull: { assigned_trip_id: oldTrip._id } });
-            }
+      if (oldTrip) {
+        oldTrip.status = "canceled";
+        oldTrip.cancel_reason = "Driver was re-assigned by the owner.";
+        await oldTrip.save();
+
+        // Free up old driver's truck
+        const oldDriver = await User.findById(oldDriverId);
+        if (oldDriver && oldDriver.truck_id) {
+          await Truck.findByIdAndUpdate(oldDriver.truck_id, {
+            status: "idle",
+            $unset: { assigned_trip_id: 1 },
+          });
         }
+        await User.findByIdAndUpdate(oldDriverId, {
+          $pull: { assigned_trip_id: oldTrip._id },
+        });
 
-        // Assign the new driver and update the request status
-        request.driver_id = newDriverId;
-        request.status = "in_progress";
-        await request.save();
-
-        // Create the new trip for the new driver
-        await createTripForRequest(request._id, newDriverId);
-
-        // Send a final confirmation notification
-        const recipient_id = isMineOwner ? request.truck_owner_id : request.mine_id.owner_id;
+        // 👉 notify old driver that he has been relieved
         await createNotification({
-            recipient_id,
-            type: "driver_assigned",
-            message: `A driver has been assigned for your order by ${req.user.name}. The trip is now in progress.`,
-            related_request_id: request._id,
+          recipient_id: oldDriverId,
+          type: "driver_unassigned",
+          title: "You’ve been unassigned",
+          message: `You have been unassigned from request for ${request.material_id.name}.`,
+          payload: {
+            requestId: request._id.toString(),
+            tripId: oldTrip._id.toString(),
+          },
         });
-
-        res.status(200).json({
-            success: true,
-            message: "Driver assigned and trip created successfully. Status updated to in-progress.",
-            data: request,
-        });
-
-    } catch (error) {
-        console.error("Error during driver assignment and trip creation:", error);
-        
-        // Rollback: Revert the request to its pre-assignment state
-        request.driver_id = oldDriverId || undefined; // Revert to old driver if one existed
-        request.status = "accepted"; // Always revert to 'accepted'
-        await request.save();
-        
-        return next(new ErrorHandler(`Failed to assign new driver: ${error.message}`, 500));
+      }
     }
+
+    // assign new driver
+    request.driver_id = newDriverId;
+    request.status = "in_progress";
+    await request.save();
+
+    const t_id = await createTripForRequest(request._id, newDriverId);
+    request.trip_id = t_id._id;
+    await request.save();
+
+    // 👉 notify the other party
+    const recipient_id = isMineOwner
+      ? request.truck_owner_id
+      : request.mine_id.owner_id;
+
+    await createNotification({
+      recipient_id,
+      type: oldDriverId ? "driver_reassigned" : "driver_assigned",
+      title: oldDriverId
+        ? "Driver Re-assigned"
+        : "Driver Assigned",
+      message: oldDriverId
+        ? `A new driver has been assigned for ${request.material_id.name}.`
+        : `Driver assigned for ${request.material_id.name}. Trip is in progress.`,
+      payload: {
+        requestId: request._id.toString(),
+        tripId: t_id._id.toString(),
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message:
+        "Driver assigned and trip created successfully. Status updated to in-progress.",
+      data: request,
+    });
+  } catch (error) {
+    console.error("Error during driver assignment and trip creation:", error);
+    request.driver_id = oldDriverId || undefined;
+    request.status = "accepted";
+    await request.save();
+
+    return next(
+      new ErrorHandler(`Failed to assign new driver: ${error.message}`, 500)
+    );
+  }
 });
 
 /**
