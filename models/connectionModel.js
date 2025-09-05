@@ -1,6 +1,5 @@
 import mongoose from 'mongoose';
 
-// not required anymore
 const connectionSchema = new mongoose.Schema({
   from_user: {
     type: mongoose.Schema.Types.ObjectId,

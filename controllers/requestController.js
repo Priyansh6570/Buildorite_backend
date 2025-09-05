@@ -1,6 +1,6 @@
 import Request from "../models/requestModel.js";
 import Mine from "../models/mineModel.js";
-import Material from "../models/materialModel.js"
+import Material from "../models/materialModel.js";
 import Truck from "../models/truckModel.js";
 import User from "../models/userModel.js";
 import Trip from "../models/tripModel.js";
@@ -9,29 +9,11 @@ import ErrorHandler from "../utils/errorHandler.js";
 import catchAsyncError from "../middleware/catchAsyncError.js";
 import { createNotification } from "./notificationController.js";
 
-/**
- * @route   POST /api/v1/requests
- * @desc    Create a new request (Buyer/Truck Owner initiates)
- * @access  Private (Truck Owner)
- */
 export const createRequest = catchAsyncError(async (req, res, next) => {
   const { mine_id, material_id, truck_id, proposal } = req.body;
 
-  if (
-    !mine_id ||
-    !material_id ||
-    !proposal ||
-    !proposal.price ||
-    !proposal.quantity ||
-    !proposal.unit ||
-    !proposal.delivery_method
-  ) {
-    return next(
-      new ErrorHandler(
-        "Missing required fields for the initial request proposal.",
-        400
-      )
-    );
+  if (!mine_id || !material_id || !proposal || !proposal.price || !proposal.quantity || !proposal.unit || !proposal.delivery_method) {
+    return next(new ErrorHandler("Missing required fields for the initial request proposal.", 400));
   }
 
   const truck_owner_id = req.user._id;
@@ -61,7 +43,6 @@ export const createRequest = catchAsyncError(async (req, res, next) => {
     $inc: { orders_count: 1 },
   });
 
-  // 👉 notify mine owner with material name
   const mine = await Mine.findById(mine_id).select("owner_id name");
   const material = await Material.findById(material_id).select("name");
 
@@ -84,17 +65,8 @@ export const createRequest = catchAsyncError(async (req, res, next) => {
   });
 });
 
-
-/**
- * @route   GET /api/v1/requests
- * @desc    Get all requests for the logged-in user (both roles)
- * @access  Private
- */
 export const getMyRequests = catchAsyncError(async (req, res, next) => {
-  const filter =
-    req.user.role === "mine_owner" || req.user.role === "admin"
-      ? { mine_id: { $in: req.user.mine_id } }
-      : { truck_owner_id: req.user._id };
+  const filter = req.user.role === "mine_owner" || req.user.role === "admin" ? { mine_id: { $in: req.user.mine_id } } : { truck_owner_id: req.user._id };
 
   const requests = await Request.find(filter)
     .populate("mine_id", "name")
@@ -116,12 +88,6 @@ export const getMyRequests = catchAsyncError(async (req, res, next) => {
   });
 });
 
-// get count of all requests
-/**
- * @route   GET /api/v1/requests/count
- * @desc    Get count of all requests
- * @access  Private
- */
 export const getRequestCount = catchAsyncError(async (req, res, next) => {
   const count = await Request.countDocuments();
   res.status(200).json({
@@ -130,21 +96,16 @@ export const getRequestCount = catchAsyncError(async (req, res, next) => {
   });
 });
 
-/**
- * @route   GET /api/v1/requests/:id
- * @desc    Get a single request by its ID
- * @access  Private
- */
 export const getRequestById = catchAsyncError(async (req, res, next) => {
   const request = await Request.findById(req.params.id)
-     .populate({
-    path: "mine_id",
-    select: "name location owner_id",
-    populate: {
-      path: "owner_id",
-      select: "name phone",
-    },
-  })
+    .populate({
+      path: "mine_id",
+      select: "name location owner_id",
+      populate: {
+        path: "owner_id",
+        select: "name phone",
+      },
+    })
     .populate({
       path: "material_id",
       select: "name",
@@ -171,14 +132,11 @@ export const getRequestById = catchAsyncError(async (req, res, next) => {
     return next(new ErrorHandler("Request not found", 404));
   }
 
-  const isTruckOwner =
-    req.user._id.toString() === request.truck_owner_id._id.toString();
+  const isTruckOwner = req.user._id.toString() === request.truck_owner_id._id.toString();
   const isMineOwner = req.user.mine_id.includes(request.mine_id._id.toString());
 
   if (!isTruckOwner && !isMineOwner) {
-    return next(
-      new ErrorHandler("You are not authorized to view this request", 403)
-    );
+    return next(new ErrorHandler("You are not authorized to view this request", 403));
   }
 
   res.status(200).json({
@@ -187,28 +145,19 @@ export const getRequestById = catchAsyncError(async (req, res, next) => {
   });
 });
 
-/**
- * @route   PATCH /api/v1/requests/:id/proposal
- * @desc    Submit a new proposal or counter-offer
- * @access  Private
- */
 export const submitProposal = catchAsyncError(async (req, res, next) => {
   const { proposal } = req.body;
   if (!proposal) {
     return next(new ErrorHandler("Proposal data is required", 400));
   }
 
-  const request = await Request.findById(req.params.id)
-    .populate("mine_id", "owner_id name")
-    .populate("material_id", "name");
+  const request = await Request.findById(req.params.id).populate("mine_id", "owner_id name").populate("material_id", "name");
   if (!request) {
     return next(new ErrorHandler("Request not found", 404));
   }
 
   if (["accepted", "rejected", "canceled", "completed"].includes(request.status)) {
-    return next(new ErrorHandler(
-      `Cannot submit a proposal for a request that is already ${request.status}`, 400
-    ));
+    return next(new ErrorHandler(`Cannot submit a proposal for a request that is already ${request.status}`, 400));
   }
 
   let currentUserRole;
@@ -236,10 +185,7 @@ export const submitProposal = catchAsyncError(async (req, res, next) => {
 
   await request.save();
 
-  // ✅ Correct recipient selection
-  const recipient_id = currentUserRole === "buyer"
-    ? request.mine_id.owner_id
-    : request.truck_owner_id;
+  const recipient_id = currentUserRole === "buyer" ? request.mine_id.owner_id : request.truck_owner_id;
 
   await createNotification({
     recipient_id,
@@ -258,46 +204,24 @@ export const submitProposal = catchAsyncError(async (req, res, next) => {
   });
 });
 
-
-/**
- * @route   PATCH /api/v1/requests/:id/status
- * @desc    Accept, Reject, or Cancel a request
- * @access  Private
- */
 export const updateRequestStatus = catchAsyncError(async (req, res, next) => {
   const { status, reason } = req.body;
   const validStatuses = ["accepted", "rejected", "canceled"];
 
   if (!status || !validStatuses.includes(status)) {
-    return next(
-      new ErrorHandler(
-        "A valid status (accepted, rejected, canceled) is required.",
-        400
-      )
-    );
+    return next(new ErrorHandler("A valid status (accepted, rejected, canceled) is required.", 400));
   }
 
-  const request = await Request.findById(req.params.id)
-    .populate("mine_id", "owner_id")
-    .populate("material_id", "name");
+  const request = await Request.findById(req.params.id).populate("mine_id", "owner_id").populate("material_id", "name");
   if (!request) {
     return next(new ErrorHandler("Request not found", 404));
   }
 
-  if (
-    ["accepted", "rejected", "canceled", "completed"].includes(request.status)
-  ) {
-    return next(
-      new ErrorHandler(
-        `Request is already ${request.status} and cannot be changed.`,
-        400
-      )
-    );
+  if (["accepted", "rejected", "canceled", "completed"].includes(request.status)) {
+    return next(new ErrorHandler(`Request is already ${request.status} and cannot be changed.`, 400));
   }
 
-  const userRole = ["mine_owner", "admin"].includes(req.user.role)
-    ? "seller"
-    : "buyer";
+  const userRole = ["mine_owner", "admin"].includes(req.user.role) ? "seller" : "buyer";
 
   let notificationMessage = "";
   let recipient_id;
@@ -305,33 +229,22 @@ export const updateRequestStatus = catchAsyncError(async (req, res, next) => {
   switch (status) {
     case "accepted":
       if (request.last_updated_by === userRole) {
-        return next(
-          new ErrorHandler("You cannot accept your own proposal.", 400)
-        );
+        return next(new ErrorHandler("You cannot accept your own proposal.", 400));
       }
       request.finalized_agreement = request.current_proposal;
       notificationMessage = `Your request for ${request.material_id.name} has been accepted by ${req.user.name}!`;
-      // recipient = opposite party
-      recipient_id =
-        userRole === "seller"
-          ? request.truck_owner_id
-          : request.mine_id.owner_id;
+      recipient_id = userRole === "seller" ? request.truck_owner_id : request.mine_id.owner_id;
       break;
 
     case "rejected":
       request.rejection_reason = reason;
       notificationMessage = `Your request for ${request.material_id.name} was rejected by ${req.user.name}.`;
-      recipient_id =
-        userRole === "seller"
-          ? request.truck_owner_id
-          : request.mine_id.owner_id;
+      recipient_id = userRole === "seller" ? request.truck_owner_id : request.mine_id.owner_id;
       break;
 
     case "canceled":
       if (userRole !== "buyer") {
-        return next(
-          new ErrorHandler("Only the truck owner can cancel the request.", 403)
-        );
+        return next(new ErrorHandler("Only the truck owner can cancel the request.", 403));
       }
       request.cancellation_reason = reason;
       notificationMessage = `The request for ${request.material_id.name} was canceled by ${req.user.name}.`;
@@ -343,16 +256,8 @@ export const updateRequestStatus = catchAsyncError(async (req, res, next) => {
   request.last_updated_by = userRole;
   await request.save();
 
-  // update related trips if rejected/canceled
   if (["rejected", "canceled"].includes(status) && request.trip_id) {
-    const reasonMsg =
-      status === "rejected"
-        ? `Truck owner (${req.user.name}) rejected the request: ${
-            reason || "no reason"
-          }`
-        : `Mine owner (${req.user.name}) canceled the request: ${
-            reason || "no reason"
-          }`;
+    const reasonMsg = status === "rejected" ? `Truck owner (${req.user.name}) rejected the request: ${reason || "no reason"}` : `Mine owner (${req.user.name}) canceled the request: ${reason || "no reason"}`;
 
     await Trip.updateMany(
       { request_id: request._id },
@@ -373,7 +278,6 @@ export const updateRequestStatus = catchAsyncError(async (req, res, next) => {
     );
   }
 
-  // 👉 send notification if recipient determined
   if (recipient_id) {
     await createNotification({
       recipient_id,
@@ -393,68 +297,41 @@ export const updateRequestStatus = catchAsyncError(async (req, res, next) => {
   });
 });
 
-/**
- * @route   PATCH /api/v1/requests/:id/assign-driver
- * @desc    Assign a driver to an accepted request
- * @access  Private
- */
 export const assignDriver = catchAsyncError(async (req, res, next) => {
   const { driver_id: newDriverId } = req.body;
   if (!newDriverId) {
     return next(new ErrorHandler("Driver ID is required.", 400));
   }
 
-  const request = await Request.findById(req.params.id)
-    .populate("mine_id", "owner_id")
-    .populate("material_id", "name");
+  const request = await Request.findById(req.params.id).populate("mine_id", "owner_id").populate("material_id", "name");
   if (!request) {
     return next(new ErrorHandler("Request not found", 404));
   }
 
   if (request.status !== "accepted" && request.status !== "in_progress") {
-    return next(
-      new ErrorHandler(
-        `Cannot assign driver. Request status is '${request.status}'`,
-        400
-      )
-    );
+    return next(new ErrorHandler(`Cannot assign driver. Request status is '${request.status}'`, 400));
   }
 
   const { delivery_method } = request.finalized_agreement;
   let isMineOwner = req.user.mine_id.includes(request.mine_id.toString());
-  // if admin then isMineOwner = true
   isMineOwner = req.user.role === "admin" || isMineOwner;
-  const isTruckOwner =
-    req.user._id.toString() === request.truck_owner_id.toString();
+  const isTruckOwner = req.user._id.toString() === request.truck_owner_id.toString();
 
   if (delivery_method === "delivery" && !isMineOwner) {
-    return next(
-      new ErrorHandler(
-        "Only the mine owner can assign a driver for delivery.",
-        403
-      )
-    );
+    return next(new ErrorHandler("Only the mine owner can assign a driver for delivery.", 403));
   }
   if (delivery_method === "pickup" && !isTruckOwner) {
-    return next(
-      new ErrorHandler(
-        "Only the truck owner can assign a driver for pickup.",
-        403
-      )
-    );
+    return next(new ErrorHandler("Only the truck owner can assign a driver for pickup.", 403));
   }
 
   const oldDriverId = request.driver_id;
 
   if (oldDriverId && oldDriverId.toString() === newDriverId.toString()) {
-    return next(
-      new ErrorHandler("This driver is already assigned to the request.", 400)
-    );
+    return next(new ErrorHandler("This driver is already assigned to the request.", 400));
   }
 
   try {
     if (oldDriverId) {
-      // 🔄 Re-assignment branch
       console.log(`Re-assigning driver. Old driver ID: ${oldDriverId}`);
       const oldTrip = await Trip.findOne({
         request_id: request._id,
@@ -467,7 +344,6 @@ export const assignDriver = catchAsyncError(async (req, res, next) => {
         oldTrip.cancel_reason = "Driver was re-assigned by the owner.";
         await oldTrip.save();
 
-        // Free up old driver's truck
         const oldDriver = await User.findById(oldDriverId);
         if (oldDriver && oldDriver.truck_id) {
           await Truck.findByIdAndUpdate(oldDriver.truck_id, {
@@ -479,7 +355,6 @@ export const assignDriver = catchAsyncError(async (req, res, next) => {
           $pull: { assigned_trip_id: oldTrip._id },
         });
 
-        // 👉 notify old driver that he has been relieved
         await createNotification({
           recipient_id: oldDriverId,
           type: "driver_unassigned",
@@ -493,7 +368,6 @@ export const assignDriver = catchAsyncError(async (req, res, next) => {
       }
     }
 
-    // assign new driver
     request.driver_id = newDriverId;
     request.status = "in_progress";
     await request.save();
@@ -502,20 +376,13 @@ export const assignDriver = catchAsyncError(async (req, res, next) => {
     request.trip_id = t_id._id;
     await request.save();
 
-    // 👉 notify the other party
-    const recipient_id = isMineOwner
-      ? request.truck_owner_id
-      : request.mine_id.owner_id;
+    const recipient_id = isMineOwner ? request.truck_owner_id : request.mine_id.owner_id;
 
     await createNotification({
       recipient_id,
       type: oldDriverId ? "driver_reassigned" : "driver_assigned",
-      title: oldDriverId
-        ? "Driver Re-assigned"
-        : "Driver Assigned",
-      message: oldDriverId
-        ? `A new driver has been assigned for ${request.material_id.name}.`
-        : `Driver assigned for ${request.material_id.name}. Trip is in progress.`,
+      title: oldDriverId ? "Driver Re-assigned" : "Driver Assigned",
+      message: oldDriverId ? `A new driver has been assigned for ${request.material_id.name}.` : `Driver assigned for ${request.material_id.name}. Trip is in progress.`,
       payload: {
         requestId: request._id.toString(),
         tripId: t_id._id.toString(),
@@ -524,8 +391,7 @@ export const assignDriver = catchAsyncError(async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message:
-        "Driver assigned and trip created successfully. Status updated to in-progress.",
+      message: "Driver assigned and trip created successfully. Status updated to in-progress.",
       data: request,
     });
   } catch (error) {
@@ -534,17 +400,10 @@ export const assignDriver = catchAsyncError(async (req, res, next) => {
     request.status = "accepted";
     await request.save();
 
-    return next(
-      new ErrorHandler(`Failed to assign new driver: ${error.message}`, 500)
-    );
+    return next(new ErrorHandler(`Failed to assign new driver: ${error.message}`, 500));
   }
 });
 
-/**
- * @route   PATCH /api/v1/requests/:id/complete
- * @desc    Mark a request as completed
- * @access  Private
- */
 export const markAsCompleted = catchAsyncError(async (req, res, next) => {
   const request = await Request.findById(req.params.id);
   if (!request) {
@@ -552,21 +411,13 @@ export const markAsCompleted = catchAsyncError(async (req, res, next) => {
   }
 
   if (request.status !== "in_progress") {
-    return next(
-      new ErrorHandler(
-        `Cannot complete a request that is not in-progress. Current status: ${request.status}`,
-        400
-      )
-    );
+    return next(new ErrorHandler(`Cannot complete a request that is not in-progress. Current status: ${request.status}`, 400));
   }
 
   const isMineOwner = req.user.mine_id.includes(request.mine_id.toString());
-  const isTruckOwner =
-    req.user._id.toString() === request.truck_owner_id.toString();
+  const isTruckOwner = req.user._id.toString() === request.truck_owner_id.toString();
   if (!isMineOwner && !isTruckOwner) {
-    return next(
-      new ErrorHandler("You are not authorized to update this request.", 403)
-    );
+    return next(new ErrorHandler("You are not authorized to update this request.", 403));
   }
 
   request.status = "completed";

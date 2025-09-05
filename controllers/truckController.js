@@ -1,9 +1,8 @@
-import catchAsyncError from '../middleware/catchAsyncError.js';
+import catchAsyncError from "../middleware/catchAsyncError.js";
 import ErrorHandler from "../utils/errorHandler.js";
-import Truck from '../models/truckModel.js';
-import User from '../models/userModel.js';
+import Truck from "../models/truckModel.js";
+import User from "../models/userModel.js";
 
-// Create a new truck -> /create-truck
 export const createTruck = catchAsyncError(async (req, res, next) => {
   try {
     const { name, registration_number, current_location } = req.body;
@@ -24,38 +23,36 @@ export const createTruck = catchAsyncError(async (req, res, next) => {
   }
 });
 
-// Get details -> /my-truck
 export const getMyTruck = catchAsyncError(async (req, res, next) => {
-  try{
+  try {
     const truck = await Truck.findOne({ driver_id: req.user._id }).populate({
-      path: 'truck_owner_id',
-      select: 'name',
+      path: "truck_owner_id",
+      select: "name",
     });
-    
+
     res.status(200).json({ success: true, data: truck });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
-  
-// Get all drivers of the owner -> /my-drivers
+
 export const getMyDrivers = catchAsyncError(async (req, res, next) => {
   try {
     const owner = await User.findById(req.user._id).populate({
-      path: 'driver_ids',
+      path: "driver_ids",
       populate: [
-        { path: 'truck_id' },
+        { path: "truck_id" },
         {
-          path: 'assigned_trip_id',
+          path: "assigned_trip_id",
           populate: {
-            path: 'request_id',
-            select: 'finalized_agreement.schedule',
+            path: "request_id",
+            select: "finalized_agreement.schedule",
           },
         },
       ],
     });
 
-    if (!owner) return next(new ErrorHandler('Owner not found', 404));
+    if (!owner) return next(new ErrorHandler("Owner not found", 404));
 
     const minimalDrivers = owner.driver_ids.map((d) => {
       const trip = d.assigned_trip_id?.[0];
@@ -85,9 +82,6 @@ export const getMyDrivers = catchAsyncError(async (req, res, next) => {
   }
 });
 
-// get driver by id with trip details 
-
-// Get all trucks for a specific truck owner -> /trucks-by-owner
 export const getTrucksByOwner = catchAsyncError(async (req, res, next) => {
   try {
     const truck_owner_id = req.user._id;
@@ -99,58 +93,56 @@ export const getTrucksByOwner = catchAsyncError(async (req, res, next) => {
 });
 
 export const getDriverDetails = catchAsyncError(async (req, res, next) => {
-    try {
-        const { driverId } = req.params;
+  try {
+    const { driverId } = req.params;
 
-        if (!driverId) {
-            return next(new ErrorHandler('Driver ID is required', 400));
-        }
-        const driverDetails = await User.findById(driverId)
-            .select('name phone truck_id assigned_trip_id')
-            .populate({
-                path: 'truck_id',
-                select: 'name registration_number',
-            })
-            .populate({
-                path: 'assigned_trip_id',
-                select: 'started_at status milestone_history destination request_id',
-                populate: {
-                    path: 'request_id',
-                    select: 'mine_id material_id finalized_agreement.quantity',
-                    populate: [
-                        {
-                            path: 'mine_id',
-                            select: 'name location',
-                        },
-                        {
-                            path: 'material_id',
-                            select: 'name',
-                        },
-                    ],
-                },
-            })
-            .lean();
-
-        if (!driverDetails) {
-            return next(new ErrorHandler('Driver not found', 404));
-        }
-        console.log('Driver details fetched successfully:', driverDetails);
-        res.status(200).json(driverDetails);
-
-    } catch (error) {
-        console.error('Error fetching driver details:', error);
-        res.status(500).json({ message: 'Server error while fetching driver details.' });
+    if (!driverId) {
+      return next(new ErrorHandler("Driver ID is required", 400));
     }
+    const driverDetails = await User.findById(driverId)
+      .select("name phone truck_id assigned_trip_id")
+      .populate({
+        path: "truck_id",
+        select: "name registration_number",
+      })
+      .populate({
+        path: "assigned_trip_id",
+        select: "started_at status milestone_history destination request_id",
+        populate: {
+          path: "request_id",
+          select: "mine_id material_id finalized_agreement.quantity",
+          populate: [
+            {
+              path: "mine_id",
+              select: "name location",
+            },
+            {
+              path: "material_id",
+              select: "name",
+            },
+          ],
+        },
+      })
+      .lean();
+
+    if (!driverDetails) {
+      return next(new ErrorHandler("Driver not found", 404));
+    }
+    console.log("Driver details fetched successfully:", driverDetails);
+    res.status(200).json(driverDetails);
+  } catch (error) {
+    console.error("Error fetching driver details:", error);
+    res.status(500).json({ message: "Server error while fetching driver details." });
+  }
 });
 
-// Update truck details -> /truck/:id
 export const updateTruck = catchAsyncError(async (req, res, next) => {
   try {
     const { id } = req.params;
     const updates = req.body;
 
     const truck = await Truck.findByIdAndUpdate(id, updates, { new: true });
-    if (!truck) return res.status(404).json({ success: false, message: 'Truck not found' });
+    if (!truck) return res.status(404).json({ success: false, message: "Truck not found" });
 
     res.status(200).json({ success: true, data: truck });
   } catch (error) {
@@ -158,37 +150,35 @@ export const updateTruck = catchAsyncError(async (req, res, next) => {
   }
 });
 
-// Delete a truck -> /truck/:id
 export const deleteTruck = catchAsyncError(async (req, res, next) => {
   try {
     const { id } = req.params;
     const truck = await Truck.findByIdAndDelete(id);
 
-    if (!truck) return res.status(404).json({ success: false, message: 'Truck not found' });
+    if (!truck) return res.status(404).json({ success: false, message: "Truck not found" });
 
     await User.findByIdAndUpdate(truck.truck_owner_id, { $pull: { truck_ids: id } });
 
-    res.status(200).json({ success: true, message: 'Truck deleted successfully' });
+    res.status(200).json({ success: true, message: "Truck deleted successfully" });
   } catch (error) {
     next(error);
   }
 });
 
-// Remove truck -> /truck/:id
 export const removeTruck = catchAsyncError(async (req, res, next) => {
   try {
     const { truckId } = req.params;
     const truckOwnerId = req.user._id;
 
     const truck = await Truck.findById(truckId);
-    if (!truck) return next(new ErrorHandler('Truck not found', 404));
+    if (!truck) return next(new ErrorHandler("Truck not found", 404));
 
     if (!truck.truck_owner_id.equals(truckOwnerId)) {
-      return next(new ErrorHandler('You do not have permission to remove this truck', 403));
+      return next(new ErrorHandler("You do not have permission to remove this truck", 403));
     }
 
     await User.findByIdAndUpdate(truckOwnerId, {
-      $pull: { truck_ids: truckId }
+      $pull: { truck_ids: truckId },
     });
 
     truck.truck_owner_id = null;
@@ -196,7 +186,7 @@ export const removeTruck = catchAsyncError(async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: 'Truck successfully removed from your account',
+      message: "Truck successfully removed from your account",
     });
   } catch (error) {
     next(error);

@@ -3,7 +3,6 @@ import catchAsyncError from "../middleware/catchAsyncError.js";
 import ErrorHandler from "../utils/errorHandler.js";
 import { applyQuery } from "../middleware/queryMiddleware.js";
 
-// Update push token -> api/v1/user/update-push-token
 export const updatePushToken = catchAsyncError(async (req, res, next) => {
   const { pushToken } = req.body;
   console.log(`Received push token: ${pushToken}`);
@@ -28,7 +27,6 @@ export const updatePushToken = catchAsyncError(async (req, res, next) => {
   });
 });
 
-// Get user profile -> api/v1/user/myprofile
 export const getUserProfile = catchAsyncError(async (req, res, next) => {
   const user = await User.findById(req.user.id);
   if (!user) return next(new ErrorHandler("User not found", 404));
@@ -38,10 +36,8 @@ export const getUserProfile = catchAsyncError(async (req, res, next) => {
   });
 });
 
-// Get all users (Admin only) -> /admin/users
 export const getAllUsers = applyQuery(User);
 
-// populate owner_id of current user with name and phone
 export const populateOwnerId = catchAsyncError(async (req, res, next) => {
   const d = await User.findById(req.user.id).select("owner_id").lean();
   if (!d) return next(new ErrorHandler("User not found", 404));
@@ -54,13 +50,11 @@ export const populateOwnerId = catchAsyncError(async (req, res, next) => {
   res.status(200).json({ success: true, owner: o });
 });
 
-// Update user profile (name, email, phone) -> api/v1/user/update
 export const updateUserProfile = catchAsyncError(async (req, res, next) => {
   const { name, email, phone } = req.body;
   const user = await User.findById(req.user.id);
   if (!user) return next(new ErrorHandler("User not found", 404));
-
-  // check if email or phone is already in use by another user
+  ("");
   const emailExists = await User.findOne({ email, _id: { $ne: req.user.id } });
   const phoneExists = await User.findOne({ phone, _id: { $ne: req.user.id } });
   if (emailExists) return next(new ErrorHandler("Email already linked to another account", 400));
@@ -77,7 +71,6 @@ export const updateUserProfile = catchAsyncError(async (req, res, next) => {
   });
 });
 
-// Get all users by role (Admin only) -> /admin/users?role=role
 export const getUsersByRole = catchAsyncError(async (req, res, next) => {
   const { role } = req.query;
   if (!role) return next(new ErrorHandler("Role is required", 400));
@@ -85,7 +78,6 @@ export const getUsersByRole = catchAsyncError(async (req, res, next) => {
   res.status(200).json({ success: true, users });
 });
 
-// Delete user (Admin only) -> /admin/user/:id
 export const deleteUser = catchAsyncError(async (req, res, next) => {
   const user = await User.findById(req.params.id);
   if (!user) return next(new ErrorHandler("User not found", 404));
@@ -96,7 +88,6 @@ export const deleteUser = catchAsyncError(async (req, res, next) => {
   });
 });
 
-// Update user role (Admin only) -> /admin/user/:id
 export const updateUserRole = catchAsyncError(async (req, res, next) => {
   const { role } = req.body;
   const user = await User.findById(req.params.id);

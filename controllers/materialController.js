@@ -6,20 +6,10 @@ import Mine from "../models/mineModel.js";
 import Request from "../models/requestModel.js";
 import ErrorHandler from "../utils/errorHandler.js";
 import catchAsyncError from "../middleware/catchAsyncError.js";
-import { createNotification } from "./notificationController.js";
 import mongoose from "mongoose";
 
 export const createMaterial = catchAsyncError(async (req, res, next) => {
-  const {
-    name,
-    mine_id,
-    prices,
-    properties,
-    description,
-    tags,
-    photos,
-    availability_status
-  } = req.body;
+  const { name, mine_id, prices, properties, description, tags, photos, availability_status } = req.body;
 
   const user_id = req.user.id;
 
@@ -32,11 +22,11 @@ export const createMaterial = catchAsyncError(async (req, res, next) => {
       let unitId;
       const unitData = price.unit;
 
-      if (!unitData) throw new Error('Unit data missing');
+      if (!unitData) throw new Error("Unit data missing");
 
-      if (typeof unitData === 'string' && mongoose.Types.ObjectId.isValid(unitData)) {
+      if (typeof unitData === "string" && mongoose.Types.ObjectId.isValid(unitData)) {
         unitId = unitData;
-      } else if (typeof unitData === 'object' && unitData !== null) {
+      } else if (typeof unitData === "object" && unitData !== null) {
         let existingUnit = await Unit.findOne({ name: unitData.name });
 
         if (existingUnit) {
@@ -63,7 +53,7 @@ export const createMaterial = catchAsyncError(async (req, res, next) => {
         price: price.price,
         stock_quantity: price.stock_quantity,
         minimum_order_quantity: price.minimum_order_quantity,
-        unit: unitId
+        unit: unitId,
       };
     })
   );
@@ -76,7 +66,7 @@ export const createMaterial = catchAsyncError(async (req, res, next) => {
     description,
     tags,
     photos,
-    availability_status: availability_status || 'available',
+    availability_status: availability_status || "available",
   });
 
   await Mine.findByIdAndUpdate(mine_id, { $push: { materials: material._id } });
@@ -85,18 +75,20 @@ export const createMaterial = catchAsyncError(async (req, res, next) => {
 });
 
 export const getAllMaterials = catchAsyncError(async (req, res, next) => {
-  const materials = await Material.find(req.query).populate({
-    path: 'prices.unit',
-    model: 'Unit'
-  }).populate('mine_id', 'name location');
+  const materials = await Material.find(req.query)
+    .populate({
+      path: "prices.unit",
+      model: "Unit",
+    })
+    .populate("mine_id", "name location");
 
   res.status(200).json({ success: true, count: materials.length, materials });
 });
 
 export const getMaterialById = catchAsyncError(async (req, res, next) => {
   const material = await Material.findById(req.params.id).populate({
-    path: 'prices.unit',
-    select: 'name type baseUnit multiplier'
+    path: "prices.unit",
+    select: "name type baseUnit multiplier",
   });
 
   if (!material) return next(new ErrorHandler("Material not found", 404));
@@ -106,23 +98,14 @@ export const getMaterialById = catchAsyncError(async (req, res, next) => {
 
 export const getMaterialsByMineId = catchAsyncError(async (req, res, next) => {
   const materials = await Material.find({ mine_id: req.params.mine_id }).populate({
-    path: 'prices.unit',
-    model: 'Unit'
+    path: "prices.unit",
+    model: "Unit",
   });
   res.status(200).json({ success: true, materials });
 });
 
 export const updateMaterial = catchAsyncError(async (req, res, next) => {
-  const {
-    name,
-    mine_id,
-    prices,
-    properties,
-    description,
-    tags,
-    photos,
-    availability_status
-  } = req.body;
+  const { name, mine_id, prices, properties, description, tags, photos, availability_status } = req.body;
 
   const user_id = req.user.id;
 
@@ -137,11 +120,11 @@ export const updateMaterial = catchAsyncError(async (req, res, next) => {
         let unitId;
         const unitData = price.unit;
 
-        if (!unitData) throw new Error('Unit data missing');
+        if (!unitData) throw new Error("Unit data missing");
 
-        if (typeof unitData === 'string' && mongoose.Types.ObjectId.isValid(unitData)) {
+        if (typeof unitData === "string" && mongoose.Types.ObjectId.isValid(unitData)) {
           unitId = unitData;
-        } else if (typeof unitData === 'object' && unitData !== null) {
+        } else if (typeof unitData === "object" && unitData !== null) {
           let existingUnit = await Unit.findOne({ name: unitData.name });
 
           if (existingUnit) {
@@ -170,7 +153,7 @@ export const updateMaterial = catchAsyncError(async (req, res, next) => {
           price: price.price,
           stock_quantity: price.stock_quantity,
           minimum_order_quantity: price.minimum_order_quantity,
-          unit: unitId
+          unit: unitId,
         };
       })
     );
@@ -186,7 +169,7 @@ export const updateMaterial = catchAsyncError(async (req, res, next) => {
       description,
       tags,
       photos,
-      availability_status: availability_status || material.availability_status
+      availability_status: availability_status || material.availability_status,
     },
     {
       new: true,
@@ -201,11 +184,10 @@ export const deleteMaterial = catchAsyncError(async (req, res, next) => {
   const material = await Material.findById(req.params.id);
   if (!material) return next(new ErrorHandler("Material not found", 404));
 
-  // Cancel any active requests for this material
   const requests = await Request.find({ material_id: material._id });
   if (requests.length > 0) {
     for (const request of requests) {
-      if(request.status !== 'completed' && request.status !== 'canceled') {
+      if (request.status !== "completed" && request.status !== "canceled") {
         request.status = "canceled";
         request.rejection_reason = "Material has been removed by Mine Owner.";
         await request.save();
@@ -213,7 +195,6 @@ export const deleteMaterial = catchAsyncError(async (req, res, next) => {
     }
   }
 
-  // Remove the material's ID from the parent mine's list
   await Mine.findByIdAndUpdate(material.mine_id, { $pull: { materials: material._id } });
 
   await material.deleteOne();
@@ -230,11 +211,7 @@ export const addMaterialView = catchAsyncError(async (req, res, next) => {
   const existing = await MaterialView.findOne({ user_id: userId, material_id: materialId });
 
   if (!existing || Date.now() - existing.last_viewed.getTime() > 12 * 60 * 60 * 1000) {
-    await MaterialView.findOneAndUpdate(
-      { user_id: userId, material_id: materialId },
-      { last_viewed: new Date() },
-      { upsert: true }
-    );
+    await MaterialView.findOneAndUpdate({ user_id: userId, material_id: materialId }, { last_viewed: new Date() }, { upsert: true });
 
     await Material.findByIdAndUpdate(materialId, { $inc: { views: 1 } });
   }

@@ -13,21 +13,17 @@ export const applySearch = (Model) => {
       }
       const roleFilter = roles ? { role: { $in: roles.split(',') } } : null;
 
-      // 1. Build the base search pipeline (it no longer creates duplicates)
       let pipeline = buildSearchQuery(model, searchTerm);
 
-      // 2. Apply role filter if it exists
       if (roleFilter) {
         pipeline.push({ $match: roleFilter });
       }
       
-      // 4. Get total count for pagination
       const countPipeline = [...pipeline, { $count: "totalCount" }];
       const countResult = await Model.aggregate(countPipeline);
       const totalCount = countResult.length > 0 ? countResult[0].totalCount : 0;
       const totalPages = Math.ceil(totalCount / (parseInt(limit) || 10));
 
-      // 5. Apply sorting, pagination to the main query
       let query = Model.aggregate(pipeline);
       buildQuery(query, { page, limit, sortBy, order, userCoordinates });
       const results = await query.exec();

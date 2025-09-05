@@ -2,16 +2,13 @@ import Trip from "../models/tripModel.js";
 import Request from "../models/requestModel.js";
 import Truck from "../models/truckModel.js";
 import Mine from "../models/mineModel.js";
-import Material from "../models/materialModel.js";
 import User from "../models/userModel.js";
 import catchAsyncError from "../middleware/catchAsyncError.js";
 import ErrorHandler from "../utils/errorHandler.js";
 import { createNotification } from "./notificationController.js";
 
 export const createTripForRequest = async (requestId, driverId) => {
-  const request = await Request.findById(requestId)
-    .populate("mine_id", "location name")
-    .populate("material_id", "name");
+  const request = await Request.findById(requestId).populate("mine_id", "location name").populate("material_id", "name");
 
   if (!request || request.status !== "in_progress") {
     throw new Error("Trip can only be created for an in-progress request.");
@@ -45,25 +42,19 @@ export const createTripForRequest = async (requestId, driverId) => {
     $push: { assigned_trip_id: trip._id },
   });
 
-  // 👉 notify the driver
   await createNotification({
     recipient_id: driverId,
     type: "driver_trip_assigned",
     title: "New Trip Assigned",
     message: `You have been assigned a new trip for ${request.material_id.name}.`,
     payload: {
-      tripId: trip._id.toString()
+      tripId: trip._id.toString(),
     },
   });
 
   return trip;
 };
 
-/**
- * @route   GET /api/v1/trips
- * @desc    Get all trips for the logged-in user (Driver, Truck Owner, Mine Owner)
- * @access  Private
- */
 export const getMyTrips = catchAsyncError(async (req, res, next) => {
   const { _id, role, mine_id } = req.user;
   let query = {};
@@ -93,7 +84,6 @@ export const getMyTrips = catchAsyncError(async (req, res, next) => {
   res.status(200).json({ success: true, count: trips.length, data: trips });
 });
 
-// Mine Owner Analytics
 export const getMineOwnerAnalytics = catchAsyncError(async (req, res, next) => {
   const sRaw = req.body?.startDate ?? req.query?.startDate;
   const eRaw = req.body?.endDate ?? req.query?.endDate;
@@ -122,11 +112,10 @@ export const getMineOwnerAnalytics = catchAsyncError(async (req, res, next) => {
       })
       .lean();
 
-      const requestStatusCounts = reqs.reduce((acc, r) => {
-  acc[r.status] = (acc[r.status] || 0) + 1;
-  return acc;
-}, {});
-
+    const requestStatusCounts = reqs.reduce((acc, r) => {
+      acc[r.status] = (acc[r.status] || 0) + 1;
+      return acc;
+    }, {});
 
     const deliveryMethodBreakdown = {
       pickup: { count: 0, materials: {} },
@@ -173,7 +162,6 @@ export const getMineOwnerAnalytics = catchAsyncError(async (req, res, next) => {
       const deliveryRevenue = ag.delivery_charge || 0;
       const total = priceRevenue + deliveryRevenue;
 
-      // Monthly totals
       if (!revenueByMonth[monthKey]) {
         revenueByMonth[monthKey] = { total: 0, price: 0, delivery: 0 };
       }
@@ -181,7 +169,6 @@ export const getMineOwnerAnalytics = catchAsyncError(async (req, res, next) => {
       revenueByMonth[monthKey].price += priceRevenue;
       revenueByMonth[monthKey].delivery += deliveryRevenue;
 
-      // Material revenue
       const matName = t.request_id?.material_id?.name || "Unknown";
       if (!revenueBreakdown.materialRevenue[matName]) {
         revenueBreakdown.materialRevenue[matName] = { total: 0, price: 0, delivery: 0 };
@@ -190,7 +177,6 @@ export const getMineOwnerAnalytics = catchAsyncError(async (req, res, next) => {
       revenueBreakdown.materialRevenue[matName].price += priceRevenue;
       revenueBreakdown.materialRevenue[matName].delivery += deliveryRevenue;
 
-      // Mine revenue
       const mineName = t.request_id?.mine_id?.name || "Unknown";
       if (!revenueBreakdown.mineRevenue[mineName]) {
         revenueBreakdown.mineRevenue[mineName] = { total: 0, price: 0, delivery: 0 };
@@ -199,7 +185,6 @@ export const getMineOwnerAnalytics = catchAsyncError(async (req, res, next) => {
       revenueBreakdown.mineRevenue[mineName].price += priceRevenue;
       revenueBreakdown.mineRevenue[mineName].delivery += deliveryRevenue;
 
-      // Totals
       revenueBreakdown.totalRevenue += total;
       revenueBreakdown.totalPriceRevenue += priceRevenue;
       revenueBreakdown.totalDeliveryRevenue += deliveryRevenue;
@@ -245,93 +230,83 @@ export const getMineOwnerAnalytics = catchAsyncError(async (req, res, next) => {
     for (const k in md) milestoneAverages[k] = +(md[k].total / md[k].count / 3600000).toFixed(2);
     const avgTripDurationHours = full.length ? +(full.reduce((p, c) => p + c, 0) / full.length / 3600000).toFixed(2) : 0;
 
-    // --- Operational Efficiency ---
-const avgLoadingTimeHrs = milestoneAverages["arrived_at_pickup→loading_complete"] || 0;
-const avgDeliveryTravelTimeHrs = milestoneAverages["en_route_to_delivery→arrived_at_delivery"] || 0;
+    const avgLoadingTimeHrs = milestoneAverages["arrived_at_pickup→loading_complete"] || 0;
+    const avgDeliveryTravelTimeHrs = milestoneAverages["en_route_to_delivery→arrived_at_delivery"] || 0;
 
-let delayedTripsCount = 0;
-let onTimeTripsCount = 0;
-let scheduledTripsCount = 0;
+    let delayedTripsCount = 0;
+    let onTimeTripsCount = 0;
+    let scheduledTripsCount = 0;
 
-trips.forEach(t => {
-  const scheduledDate = t.request_id?.finalized_agreement?.schedule?.date
-    ? new Date(t.request_id.finalized_agreement.schedule.date)
-    : null;
-  const deliveredDate = t.milestone_history?.find(m => m.status === "delivery_verified")?.timestamp;
+    trips.forEach((t) => {
+      const scheduledDate = t.request_id?.finalized_agreement?.schedule?.date ? new Date(t.request_id.finalized_agreement.schedule.date) : null;
+      const deliveredDate = t.milestone_history?.find((m) => m.status === "delivery_verified")?.timestamp;
 
-  if (scheduledDate && deliveredDate) {
-    scheduledTripsCount++;
-    if (deliveredDate > scheduledDate) delayedTripsCount++;
-    else onTimeTripsCount++;
-  }
-});
+      if (scheduledDate && deliveredDate) {
+        scheduledTripsCount++;
+        if (deliveredDate > scheduledDate) delayedTripsCount++;
+        else onTimeTripsCount++;
+      }
+    });
 
-const onTimeRate = scheduledTripsCount
-  ? Number(((onTimeTripsCount / scheduledTripsCount) * 100).toFixed(2))
-  : 0;
+    const onTimeRate = scheduledTripsCount ? Number(((onTimeTripsCount / scheduledTripsCount) * 100).toFixed(2)) : 0;
 
-// --- Seasonal & Time Trends ---
-const months = Object.keys(ordersByMonth).sort();
-const peakMonth = months.reduce((max, month) => {
-  return ordersByMonth[month] > (ordersByMonth[max] || 0) ? month : max;
-}, months[0] || null);
+    const months = Object.keys(ordersByMonth).sort();
+    const peakMonth = months.reduce((max, month) => {
+      return ordersByMonth[month] > (ordersByMonth[max] || 0) ? month : max;
+    }, months[0] || null);
 
-let growthRatePercent = 0;
-if (months.length >= 2) {
-  const lastMonthOrders = ordersByMonth[months[months.length - 2]] || 0;
-  const currentMonthOrders = ordersByMonth[months[months.length - 1]] || 0;
-  if (lastMonthOrders > 0) {
-    growthRatePercent = Number((((currentMonthOrders - lastMonthOrders) / lastMonthOrders) * 100).toFixed(2));
-  }
-}
+    let growthRatePercent = 0;
+    if (months.length >= 2) {
+      const lastMonthOrders = ordersByMonth[months[months.length - 2]] || 0;
+      const currentMonthOrders = ordersByMonth[months[months.length - 1]] || 0;
+      if (lastMonthOrders > 0) {
+        growthRatePercent = Number((((currentMonthOrders - lastMonthOrders) / lastMonthOrders) * 100).toFixed(2));
+      }
+    }
 
-// Delivery share change
-let deliveryShareChangePercent = 0;
-if (months.length >= 2) {
-  const getShare = (monthIndex) => {
-    const month = months[monthIndex];
-    const monthTrips = trips.filter(t => t.started_at?.toISOString().slice(0, 7) === month);
-    const deliveryCount = monthTrips.filter(t => t.request_id?.delivery_method === "delivery").length;
-    return monthTrips.length ? (deliveryCount / monthTrips.length) * 100 : 0;
-  };
-  const prevShare = getShare(months.length - 2);
-  const currShare = getShare(months.length - 1);
-  deliveryShareChangePercent = Number((currShare - prevShare).toFixed(2));
-}
+    let deliveryShareChangePercent = 0;
+    if (months.length >= 2) {
+      const getShare = (monthIndex) => {
+        const month = months[monthIndex];
+        const monthTrips = trips.filter((t) => t.started_at?.toISOString().slice(0, 7) === month);
+        const deliveryCount = monthTrips.filter((t) => t.request_id?.delivery_method === "delivery").length;
+        return monthTrips.length ? (deliveryCount / monthTrips.length) * 100 : 0;
+      };
+      const prevShare = getShare(months.length - 2);
+      const currShare = getShare(months.length - 1);
+      deliveryShareChangePercent = Number((currShare - prevShare).toFixed(2));
+    }
 
-// --- Add to your return payload ---
-return res.status(200).json({
-  success: true,
-  ordersByMonth,
-  revenueByMonth,
-  revenueBreakdown,
-  topMaterials,
-  completionRate,
-  avgTripDurationHours,
-  milestoneAverages,
-  deliveryMethodBreakdown,
-  efficiencyMetrics: {
-    avgLoadingTimeHrs,
-    avgDeliveryTravelTimeHrs,
-    delayedTripsCount,
-    onTimeRate
-  },
-  seasonalTrends: {
-    peakMonth,
-    growthRatePercent,
-    deliveryShareChangePercent
-  },
-  requestStatusCounts
-});
+    return res.status(200).json({
+      success: true,
+      ordersByMonth,
+      revenueByMonth,
+      revenueBreakdown,
+      topMaterials,
+      completionRate,
+      avgTripDurationHours,
+      milestoneAverages,
+      deliveryMethodBreakdown,
+      efficiencyMetrics: {
+        avgLoadingTimeHrs,
+        avgDeliveryTravelTimeHrs,
+        delayedTripsCount,
+        onTimeRate,
+      },
+      seasonalTrends: {
+        peakMonth,
+        growthRatePercent,
+        deliveryShareChangePercent,
+      },
+      requestStatusCounts,
+    });
   } catch (error) {
     console.error("Error fetching mine owner analytics:", error);
     return res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 });
 
-// Truck Owner Analytics
 export const getTruckOwnerAnalytics = catchAsyncError(async (req, res, next) => {
-  // 1. Setup Date Range
   const sRaw = req.body?.startDate ?? req.query?.startDate;
   const eRaw = req.body?.endDate ?? req.query?.endDate;
   const start = sRaw ? new Date(sRaw) : new Date("2025-01-01");
@@ -339,7 +314,6 @@ export const getTruckOwnerAnalytics = catchAsyncError(async (req, res, next) => 
   if (eRaw) end.setHours(23, 59, 59, 999);
 
   try {
-    // 2. Fetch Core Data
     const requests = await Request.find({
       truck_owner_id: req.user._id,
       createdAt: { $gte: start, $lte: end },
@@ -359,15 +333,11 @@ export const getTruckOwnerAnalytics = catchAsyncError(async (req, res, next) => 
         populate: [
           { path: "material_id", select: "name" },
           { path: "mine_id", select: "name" },
-          // FIX #1: Corrected the populate path for the nested 'unit' field.
           { path: "finalized_agreement.unit", select: "name" },
         ],
       })
       .lean();
 
-    // 3. Process Analytics Data
-
-    // A. Procurement & Spending Metrics
     const spendByMonth = {};
     const spendBreakdown = {
       totalSpend: 0,
@@ -385,7 +355,6 @@ export const getTruckOwnerAnalytics = catchAsyncError(async (req, res, next) => 
       const deliveryCost = ag.delivery_charge || 0;
       const totalCost = materialCost + deliveryCost;
 
-      // Monthly spend
       if (!spendByMonth[monthKey]) {
         spendByMonth[monthKey] = { total: 0, material: 0, delivery: 0 };
       }
@@ -393,13 +362,10 @@ export const getTruckOwnerAnalytics = catchAsyncError(async (req, res, next) => 
       spendByMonth[monthKey].material += materialCost;
       spendByMonth[monthKey].delivery += deliveryCost;
 
-      // Overall spend totals
       spendBreakdown.totalSpend += totalCost;
       spendBreakdown.materialSpend += materialCost;
       spendBreakdown.deliverySpend += deliveryCost;
 
-      // Total quantity by unit
-      // FIX #2: Corrected the access path for the populated unit's name.
       const unitName = trip.request_id?.finalized_agreement?.unit?.name || "Units";
       if (!totalQuantityBreakdown[unitName]) {
         totalQuantityBreakdown[unitName] = 0;
@@ -407,7 +373,6 @@ export const getTruckOwnerAnalytics = catchAsyncError(async (req, res, next) => 
       totalQuantityBreakdown[unitName] += ag.quantity || 0;
     });
 
-    // B. Order & Trip Volume
     const ordersByMonth = requests.reduce((acc, req) => {
       const monthKey = req.createdAt.toISOString().slice(0, 7);
       acc[monthKey] = (acc[monthKey] || 0) + 1;
@@ -419,7 +384,6 @@ export const getTruckOwnerAnalytics = catchAsyncError(async (req, res, next) => 
       return acc;
     }, {});
 
-    // C. Top Suppliers and Materials
     const materialCounts = {};
     const mineCounts = {};
     requests.forEach((req) => {
@@ -443,7 +407,6 @@ export const getTruckOwnerAnalytics = catchAsyncError(async (req, res, next) => 
       .slice(0, 5)
       .map(([name, count]) => ({ name, count }));
 
-    // D. Delivery Method Breakdown
     const deliveryMethodBreakdown = requests.reduce(
       (acc, req) => {
         if (req.finalized_agreement) {
@@ -455,7 +418,6 @@ export const getTruckOwnerAnalytics = catchAsyncError(async (req, res, next) => 
       { pickup: 0, delivery: 0 }
     );
 
-    // E. Logistics & Fleet Efficiency
     const steps = ["trip_assigned", "trip_started", "arrived_at_pickup", "loading_complete", "pickup_verified", "en_route_to_delivery", "arrived_at_delivery", "delivery_complete", "delivery_verified"];
     const milestoneDurations = {};
     const fullTripDurations = [];
@@ -500,7 +462,6 @@ export const getTruckOwnerAnalytics = catchAsyncError(async (req, res, next) => 
 
     const onTimeRate = scheduledTripsCount ? Number(((onTimeTripsCount / scheduledTripsCount) * 100).toFixed(2)) : 100;
 
-    // 4. Send Response
     return res.status(200).json({
       success: true,
       spendByMonth,
@@ -521,50 +482,42 @@ export const getTruckOwnerAnalytics = catchAsyncError(async (req, res, next) => 
     });
   } catch (error) {
     console.error("Error fetching truck owner analytics:", error);
-    // Use the next middleware for error handling
     next(error);
   }
 });
 
-// Get Count of current user's active trips and completed trips using trip status
 export const getUserTripCounts = catchAsyncError(async (req, res, next) => {
   const uid = req.user._id;
 
   const activeTripsCount = await Trip.countDocuments({
     driver_id: uid,
-    status: { $in: ["active", "issue_reported"] }
+    status: { $in: ["active", "issue_reported"] },
   });
 
   const completedTripsCount = await Trip.countDocuments({
     driver_id: uid,
-    status: "completed"
+    status: "completed",
   });
 
   res.status(200).json({
     success: true,
     data: {
       activeTripsCount,
-      completedTripsCount
-    }
+      completedTripsCount,
+    },
   });
 });
 
-
-/**
- * @route   GET /api/v1/trips/:id
- * @desc    Get a single trip by its ID with full details
- * @access  Private
- */
 export const getTripById = catchAsyncError(async (req, res, next) => {
   const trip = await Trip.findById(req.params.id)
     .populate({
       path: "request_id",
       populate: [
         { path: "material_id", select: "name" },
-        { 
-          path: "mine_id", 
+        {
+          path: "mine_id",
           select: "name location",
-          populate: { path: "owner_id", select: "name phone" } 
+          populate: { path: "owner_id", select: "name phone" },
         },
         { path: "truck_owner_id", select: "name phone" },
         { path: "finalized_agreement.unit", select: "name" },
@@ -579,31 +532,23 @@ export const getTripById = catchAsyncError(async (req, res, next) => {
   res.status(200).json({ success: true, data: trip });
 });
 
-/**
- * @route   PATCH /api/v1/trips/:id/milestone
- * @desc    Update a trip milestone (for Drivers)
- * @access  Private (Driver)
- */
 export const updateMilestone = catchAsyncError(async (req, res, next) => {
   const { status, location } = req.body;
 
-const trip = await Trip.findById(req.params.id)
-  .populate("request_id", "material_id truck_owner_id mine_id")
-  .populate({
-    path: "request_id",
-    populate: [
-      { path: "mine_id", select: "owner_id" },
-      { path: "material_id", select: "name" },
-    ],
-  });
-
+  const trip = await Trip.findById(req.params.id)
+    .populate("request_id", "material_id truck_owner_id mine_id")
+    .populate({
+      path: "request_id",
+      populate: [
+        { path: "mine_id", select: "owner_id" },
+        { path: "material_id", select: "name" },
+      ],
+    });
 
   if (!trip) return next(new ErrorHandler("Trip not found", 404));
 
   if (trip.driver_id.toString() !== req.user._id.toString()) {
-    return next(
-      new ErrorHandler("You are not authorized to update this trip.", 403)
-    );
+    return next(new ErrorHandler("You are not authorized to update this trip.", 403));
   }
 
   const newMilestone = { status, timestamp: new Date() };
@@ -622,7 +567,6 @@ const trip = await Trip.findById(req.params.id)
 
   await trip.save();
 
-  // 👉 map status to human-readable text
   const statusMessages = {
     trip_assigned: "Driver assigned to trip",
     trip_started: "Trip started",
@@ -635,7 +579,6 @@ const trip = await Trip.findById(req.params.id)
 
   const readableStatus = statusMessages[status] || status;
 
-  // 👉 Notify mine & truck owners
   const materialName = trip.request_id.material_id.name;
   const mineOwnerId = trip.request_id.mine_id.owner_id;
   const truckOwnerId = trip.request_id.truck_owner_id;
@@ -670,13 +613,8 @@ const trip = await Trip.findById(req.params.id)
   res.status(200).json({ success: true, data: trip });
 });
 
-/**
- * @route   PATCH /api/v1/trips/:id/verify
- * @desc    Verify a milestone (for Mine/Truck Owners)
- * @access  Private (Mine Owner, Truck Owner)
- */
 export const verifyMilestone = catchAsyncError(async (req, res, next) => {
-  const { status } = req.body; // 'pickup_verified' or 'delivery_verified'
+  const { status } = req.body;
 
   const trip = await Trip.findById(req.params.id)
     .populate("request_id", "truck_owner_id material_id")
@@ -697,14 +635,12 @@ export const verifyMilestone = catchAsyncError(async (req, res, next) => {
 
   trip.milestone_history.push({ status, timestamp: new Date() });
 
-  // ✅ human-readable status text
   const statusMessages = {
     pickup_verified: "Pickup verified",
     delivery_verified: "Delivery verified - Trip completed",
   };
   const readableStatus = statusMessages[status] || status;
 
-  // If final verification, mark trip as completed
   if (status === "delivery_verified") {
     trip.status = "completed";
 
@@ -722,7 +658,6 @@ export const verifyMilestone = catchAsyncError(async (req, res, next) => {
 
   await trip.save();
 
-  // 👉 Notifications
   const materialName = trip.request_id.material_id.name;
   const truckOwnerId = trip.request_id.truck_owner_id;
   const mineOwnerId = trip.mine_id.owner_id;
@@ -731,7 +666,6 @@ export const verifyMilestone = catchAsyncError(async (req, res, next) => {
   const payload = { tripId: trip._id.toString() };
 
   if (status === "pickup_verified") {
-    // Mine owner verified pickup → notify truck owner + driver
     if (truckOwnerId) {
       await createNotification({
         recipient_id: truckOwnerId,
@@ -754,7 +688,6 @@ export const verifyMilestone = catchAsyncError(async (req, res, next) => {
   }
 
   if (status === "delivery_verified") {
-    // Truck owner verified delivery → notify mine owner + driver
     if (mineOwnerId) {
       await createNotification({
         recipient_id: mineOwnerId,
@@ -779,11 +712,6 @@ export const verifyMilestone = catchAsyncError(async (req, res, next) => {
   res.status(200).json({ success: true, data: trip });
 });
 
-/**
- * @route   PATCH /api/v1/trips/:id/location
- * @desc    Update live location of the truck (for Drivers)
- * @access  Private (Driver)
- */
 export const updateLiveLocation = catchAsyncError(async (req, res, next) => {
   const { coordinates } = req.body;
 
@@ -796,11 +724,6 @@ export const updateLiveLocation = catchAsyncError(async (req, res, next) => {
   res.status(200).json({ success: true, message: "Location updated." });
 });
 
-/**
- * @route   PATCH /api/v1/trips/:id/report-issue
- * @desc    Report an issue with the trip (for Drivers)
- * @access  Private (Driver)
- */
 export const reportIssue = catchAsyncError(async (req, res, next) => {
   const { reason, notes } = req.body;
 
@@ -821,7 +744,6 @@ export const reportIssue = catchAsyncError(async (req, res, next) => {
 
   await trip.save();
 
-  // ✅ Notifications
   const materialName = trip.request_id.material_id.name;
   const truckOwnerId = trip.request_id.truck_owner_id;
   const mineOwnerId = trip.mine_id.owner_id;

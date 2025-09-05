@@ -35,7 +35,6 @@ export const io = new Server(server, {
   },
 });
 
-// Helper function to check if location is fresh (under 10 minutes)
 const isLocationFresh = (timestamp) => {
   const now = Date.now();
   const locationTime = new Date(timestamp).getTime();
@@ -44,10 +43,9 @@ const isLocationFresh = (timestamp) => {
   return ageMs < LOCATION_STALENESS_THRESHOLD_MS;
 };
 
-// Helper function to get trip's live_location from database
 const getTripLiveLocation = async (tripId) => {
   try {
-    const trip = await Trip.findById(tripId).select('live_location driver_id');
+    const trip = await Trip.findById(tripId).select("live_location driver_id");
     if (!trip) {
       console.log(`🔍 [DB Check] Trip ${tripId} not found`);
       return { trip: null, location: null, driver: null };
@@ -58,13 +56,13 @@ const getTripLiveLocation = async (tripId) => {
       exists: !!liveLocation,
       coordinates: liveLocation?.coordinates,
       timestamp: liveLocation?.timestamp ? new Date(liveLocation.timestamp).toISOString() : null,
-      ageMinutes: liveLocation?.timestamp ? Math.round((Date.now() - new Date(liveLocation.timestamp).getTime()) / 60000) : 'N/A'
+      ageMinutes: liveLocation?.timestamp ? Math.round((Date.now() - new Date(liveLocation.timestamp).getTime()) / 60000) : "N/A",
     });
 
     return {
       trip,
       location: liveLocation,
-      driver: trip.driver_id
+      driver: trip.driver_id,
     };
   } catch (error) {
     console.error(`🔍 [DB Check] Error fetching trip ${tripId}:`, error);
@@ -72,7 +70,6 @@ const getTripLiveLocation = async (tripId) => {
   }
 };
 
-// Helper function to update trip's live_location in database
 const updateTripLiveLocation = async (tripId, locationData) => {
   try {
     const updatedTrip = await Trip.findByIdAndUpdate(
@@ -96,17 +93,16 @@ const updateTripLiveLocation = async (tripId, locationData) => {
   }
 };
 
-// Helper function to update all active trips for a driver (for periodic updates)
 const updateAllDriverTripLocations = async (driverId, locationData) => {
   try {
     const activeTrips = await Trip.find({
       driver_id: driverId,
-      status: 'active'
+      status: "active",
     });
 
     console.log(`📍 [Bulk Update] Found ${activeTrips.length} active trips for driver ${driverId}`);
 
-    const updatePromises = activeTrips.map(trip => 
+    const updatePromises = activeTrips.map((trip) =>
       Trip.findByIdAndUpdate(trip._id, {
         live_location: {
           type: "Point",
@@ -196,81 +192,72 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Handle periodic location updates from drivers (every 10 minutes)
   socket.on("driverLocationUpdate", async ({ driverId, coordinates, accuracy, timestamp, source }) => {
     const updateTimestamp = new Date().toISOString();
     console.log(`[${updateTimestamp}] [Periodic Location] Received update from driver ${driverId} (${source}):`, {
       coordinates,
       accuracy,
-      timestamp: new Date(timestamp).toISOString()
+      timestamp: new Date(timestamp).toISOString(),
     });
 
-    // Store driver location in memory for quick access
     driverLocations.set(driverId, {
       coordinates,
       accuracy,
       timestamp,
       lastUpdated: Date.now(),
-      source
+      source,
     });
 
-    // Update all active trips for this driver in database
     const updatedTrips = await updateAllDriverTripLocations(driverId, {
       coordinates,
       accuracy,
-      timestamp
+      timestamp,
     });
 
     console.log(`[${updateTimestamp}] [Periodic Location] Updated ${updatedTrips.length} active trips for driver ${driverId}`);
   });
 
-  // Handle immediate location updates for specific trip tracking (in response to requests)
   socket.on("driverTrackingLocationUpdate", async ({ tripId, driverId, coordinates, accuracy, timestamp, source }) => {
     const trackingTimestamp = new Date().toISOString();
     console.log(`[${trackingTimestamp}] [Location Response] Received location response for trip ${tripId} from driver ${driverId}:`, {
       coordinates,
       accuracy,
       timestamp: new Date(timestamp).toISOString(),
-      source
+      source,
     });
 
-    // Update driver location in memory
     driverLocations.set(driverId, {
       coordinates,
       accuracy,
       timestamp,
       lastUpdated: Date.now(),
-      source
+      source,
     });
 
-    // Update specific trip's live_location in database
     const updatedTrip = await updateTripLiveLocation(tripId, {
       coordinates,
       accuracy,
-      timestamp
+      timestamp,
     });
 
     if (updatedTrip) {
-      // Send fresh location to mine app clients tracking this trip
       io.to(tripId).emit("driverLocationUpdated", {
         coordinates,
         accuracy,
         timestamp: timestamp || new Date().toISOString(),
-        source: 'real_time_tracking',
-        isStale: false
+        source: "real_time_tracking",
+        isStale: false,
       });
 
-      // Notify that tracking started successfully
       io.to(tripId).emit("tracking_started", {
         tripId,
         message: "Driver location received successfully.",
-        isStale: false
+        isStale: false,
       });
 
       console.log(`[${trackingTimestamp}] [Location Response] ✅ Sent fresh location to trip ${tripId} watchers`);
     }
 
-    // Clear timeout if this was in response to a request
     const session = trackingSessions.get(tripId);
     if (session && session.timeoutId) {
       clearTimeout(session.timeoutId);
@@ -359,7 +346,6 @@ io.on("connection", (socket) => {
     }
   });
 
-  // MAIN TRACKING LOGIC - Database-First Approach
   socket.on("startTrackingTrip", async (payload) => {
     const startTimestamp = new Date().toISOString();
     const { userId, tripId, driverId } = payload;
@@ -367,7 +353,6 @@ io.on("connection", (socket) => {
 
     socket.join(tripId);
 
-    // Handle existing session
     if (trackingSessions.has(tripId)) {
       const session = trackingSessions.get(tripId);
       session.watchers.add(socket.id);
@@ -376,36 +361,34 @@ io.on("connection", (socket) => {
     }
 
     try {
-      // Step 1: Check trip's live_location from database
       console.log(`[${startTimestamp}] [📍 Step 1] Checking trip ${tripId} live_location from database...`);
       const { trip, location: liveLocation, driver } = await getTripLiveLocation(tripId);
 
       if (!trip) {
-        socket.emit("tracking_failed", { 
-          tripId, 
+        socket.emit("tracking_failed", {
+          tripId,
           reason: "Trip not found.",
-          errorType: "trip_not_found"
+          errorType: "trip_not_found",
         });
         return;
       }
 
       if (!driver) {
-        socket.emit("tracking_failed", { 
-          tripId, 
+        socket.emit("tracking_failed", {
+          tripId,
           reason: "Driver not assigned to this trip.",
-          errorType: "driver_not_found"
+          errorType: "driver_not_found",
         });
         return;
       }
 
-      // Step 2: Check if live_location exists and its age
       const hasLiveLocation = liveLocation && liveLocation.coordinates && liveLocation.timestamp;
       const isFreshLocation = hasLiveLocation && isLocationFresh(liveLocation.timestamp);
 
       console.log(`[${startTimestamp}] [📍 Step 2] Live location analysis:`, {
         hasLocation: hasLiveLocation,
         isFresh: isFreshLocation,
-        ageMinutes: hasLiveLocation ? Math.round((Date.now() - new Date(liveLocation.timestamp).getTime()) / 60000) : 'N/A'
+        ageMinutes: hasLiveLocation ? Math.round((Date.now() - new Date(liveLocation.timestamp).getTime()) / 60000) : "N/A",
       });
 
       const session = {
@@ -417,56 +400,47 @@ io.on("connection", (socket) => {
       };
       trackingSessions.set(tripId, session);
 
-      // Step 3: Send location data (fresh or stale) and conditionally request new location
       if (hasLiveLocation) {
-        // Always send the location data we have
         console.log(`[${startTimestamp}] [📍 Step 3] Sending existing location to client (Age: ${Math.round((Date.now() - new Date(liveLocation.timestamp).getTime()) / 60000)} min)`);
-        
+
         io.to(tripId).emit("driverLocationUpdated", {
           coordinates: liveLocation.coordinates,
           accuracy: liveLocation.accuracy || 0,
           timestamp: new Date(liveLocation.timestamp).toISOString(),
-          source: isFreshLocation ? 'cached_recent' : 'cached_old',
-          isStale: !isFreshLocation
+          source: isFreshLocation ? "cached_recent" : "cached_old",
+          isStale: !isFreshLocation,
         });
 
         io.to(tripId).emit("tracking_started", {
           tripId,
-          message: isFreshLocation 
+          message: isFreshLocation
             ? `Driver location available (${Math.round((Date.now() - new Date(liveLocation.timestamp).getTime()) / 60000)} minutes ago)`
             : `Latest location unavailable, showing location from ${Math.round((Date.now() - new Date(liveLocation.timestamp).getTime()) / 60000)} minutes ago.`,
-          isStale: !isFreshLocation
+          isStale: !isFreshLocation,
         });
 
-        // If location is stale (>10 min), request fresh location
         if (!isFreshLocation) {
           console.log(`[${startTimestamp}] [📱 Step 4] Location is stale, requesting fresh location...`);
           await requestFreshLocation(tripId, driver, session, startTimestamp);
         } else {
-          // Fresh location - we're done
           session.status = "active";
           console.log(`[${startTimestamp}] [✅ Complete] Fresh location provided, tracking active`);
         }
       } else {
-        // No location data at all
         console.log(`[${startTimestamp}] [📍 Step 3] No location data found, must request fresh location`);
-        
-        // Request fresh location immediately
         await requestFreshLocation(tripId, driver, session, startTimestamp);
       }
-
     } catch (error) {
       console.error(`[${startTimestamp}] [❌ Error] Error in tracking request:`, error);
       socket.emit("tracking_failed", {
         tripId,
         reason: "Server error occurred while fetching location.",
-        errorType: "server_error"
+        errorType: "server_error",
       });
       trackingSessions.delete(tripId);
     }
   });
 
-  // Helper function to request fresh location from driver
   const requestFreshLocation = async (tripId, driverId, session, startTimestamp) => {
     try {
       const driver = await User.findById(driverId);
@@ -474,42 +448,36 @@ io.on("connection", (socket) => {
         io.to(tripId).emit("tracking_failed", {
           tripId,
           reason: "Driver information not found.",
-          errorType: "driver_not_found"
+          errorType: "driver_not_found",
         });
         trackingSessions.delete(tripId);
         return;
       }
 
-      // Set 20-second timeout for fresh location response
       session.timeoutId = setTimeout(async () => {
         console.log(`[${new Date().toISOString()}] [⏰ Timeout] Driver ${driverId} did not provide fresh location within 20 seconds for trip ${tripId}`);
-        
-        // Check if we had any old location to show
+
         const { location: oldLocation } = await getTripLiveLocation(tripId);
         if (oldLocation && oldLocation.coordinates) {
-          // We already showed the old location, so just keep it - NO ERROR MESSAGE
           console.log(`[${new Date().toISOString()}] [📍 Keep Old] Driver didn't respond but we have old location, keeping it visible`);
-          session.status = "active"; // Keep session active with old location
-          // Don't send any error - just keep showing the old location
+          session.status = "active";
         } else {
-          // No location data at all - only then send error
           console.log(`[${new Date().toISOString()}] [❌ No Data] No location data available at all`);
           io.to(tripId).emit("tracking_failed", {
             tripId,
             reason: "Cannot get driver location. No location data available.",
-            errorType: "no_location_available"
+            errorType: "no_location_available",
           });
           trackingSessions.delete(tripId);
         }
       }, PUSH_RESPONSE_TIMEOUT_MS);
 
-      // Try to request location from driver
       if (session.driverSocketId) {
         console.log(`[${startTimestamp}] [🔌 Online] Driver ${driverId} is online, requesting immediate location via socket`);
-        io.to(session.driverSocketId).emit("requestImmediateLocation", { 
+        io.to(session.driverSocketId).emit("requestImmediateLocation", {
           tripId,
           urgent: true,
-          reason: "Mine owner requesting current location"
+          reason: "Mine owner requesting current location",
         });
       } else if (driver.pushToken) {
         console.log(`[${startTimestamp}] [📱 Offline] Driver ${driverId} is offline, sending push notification`);
@@ -518,19 +486,16 @@ io.on("connection", (socket) => {
         if (!notificationSent) {
           console.log(`[${startTimestamp}] [❌ Push Failed] Failed to send push notification to driver ${driverId}`);
           clearTimeout(session.timeoutId);
-          
-          // Check if we have any old location data to fall back on
+
           const { location: fallbackLocation } = await getTripLiveLocation(tripId);
           if (fallbackLocation && fallbackLocation.coordinates) {
-            // Keep showing old location, don't send error since we have location data
             console.log(`[${startTimestamp}] [📍 Fallback] Push failed but we have old location, keeping it visible`);
-            session.status = "active"; // Keep session active with old location
+            session.status = "active";
           } else {
-            // No location data at all - send error
             io.to(tripId).emit("tracking_failed", {
               tripId,
               reason: "Failed to notify driver and no location data available.",
-              errorType: "notification_failed"
+              errorType: "notification_failed",
             });
             trackingSessions.delete(tripId);
           }
@@ -538,19 +503,16 @@ io.on("connection", (socket) => {
       } else {
         console.log(`[${startTimestamp}] [❌ Unreachable] Cannot reach driver ${driverId}: offline and no push token`);
         clearTimeout(session.timeoutId);
-        
-        // Check if we have any old location data
+
         const { location: fallbackLocation } = await getTripLiveLocation(tripId);
         if (fallbackLocation && fallbackLocation.coordinates) {
-          // Keep showing old location, no error message
           console.log(`[${startTimestamp}] [📍 Fallback] Driver unreachable but we have old location, keeping it visible`);
-          session.status = "active"; // Keep session active with old location
+          session.status = "active";
         } else {
-          // No location data at all - send error
           io.to(tripId).emit("tracking_failed", {
             tripId,
             reason: "Driver is unreachable and no location data is available.",
-            errorType: "driver_unreachable"
+            errorType: "driver_unreachable",
           });
           trackingSessions.delete(tripId);
         }
@@ -561,18 +523,17 @@ io.on("connection", (socket) => {
       io.to(tripId).emit("tracking_failed", {
         tripId,
         reason: "Server error while requesting driver location.",
-        errorType: "server_error"
+        errorType: "server_error",
       });
       trackingSessions.delete(tripId);
     }
   };
 
-  // Legacy support
   socket.on("updateLocation", async ({ tripId, coordinates, accuracy, timestamp }) => {
     console.log(`[Legacy] Received updateLocation event - converting to new format`);
-    
+
     try {
-      const trip = await Trip.findById(tripId).populate('driver_id');
+      const trip = await Trip.findById(tripId).populate("driver_id");
       if (trip && trip.driver_id) {
         socket.emit("driverTrackingLocationUpdate", {
           tripId,
@@ -580,7 +541,7 @@ io.on("connection", (socket) => {
           coordinates,
           accuracy,
           timestamp,
-          source: 'legacy_update'
+          source: "legacy_update",
         });
       }
     } catch (error) {
@@ -613,7 +574,6 @@ io.on("connection", (socket) => {
     console.log(`[${disconnectTimestamp}] [🔌 Disconnect] Client disconnected: ${socket.id}`);
     let disconnectedUserId = null;
 
-    // Find which user disconnected
     for (const [userId, socketId] of userSocketMap.entries()) {
       if (socketId === socket.id) {
         disconnectedUserId = userId;
@@ -624,18 +584,13 @@ io.on("connection", (socket) => {
     if (disconnectedUserId) {
       userSocketMap.delete(disconnectedUserId);
       console.log(`[${disconnectTimestamp}] [👤 User Disconnect] User ${disconnectedUserId} disconnected`);
-
-      // Don't immediately clear driver location data - keep it for a while
-      // Only clear it after some time or when driver explicitly goes offline
       console.log(`[${disconnectTimestamp}] [💾 Location Kept] Keeping location data for driver ${disconnectedUserId} (might reconnect)`);
 
-      // Update tracking sessions but don't immediately fail them
       trackingSessions.forEach((session, tripId) => {
         if (session.driverId === disconnectedUserId) {
           console.log(`[${disconnectTimestamp}] [📱 Driver Offline] Driver for trip ${tripId} went offline, but keeping session active`);
-          session.driverSocketId = null; // Mark as offline but don't end session
-          
-          // If there was a pending request, they might still respond via push notification
+          session.driverSocketId = null;
+
           if (session.status === "pending" && session.timeoutId) {
             console.log(`[${disconnectTimestamp}] [⏳ Keep Waiting] Driver offline but still waiting for location response via push`);
           }
@@ -643,7 +598,6 @@ io.on("connection", (socket) => {
       });
     }
 
-    // Clean up watcher sessions
     trackingSessions.forEach((session, tripId) => {
       if (session.watchers.has(socket.id)) {
         session.watchers.delete(socket.id);

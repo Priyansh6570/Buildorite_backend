@@ -1,4 +1,4 @@
-import { searchFields } from '../config/searchConfig.js';
+import { searchFields } from "../config/searchConfig.js";
 
 export const buildSearchQuery = (model, searchTerm) => {
   if (!searchTerm) return [];
@@ -7,31 +7,26 @@ export const buildSearchQuery = (model, searchTerm) => {
   const pipeline = [];
   const orConditions = [];
 
-  // Process direct fields first
   config
     .filter((field) => !field.ref)
     .forEach((field) => {
       orConditions.push({
-        [field.field]: { $regex: searchTerm, $options: 'i' },
+        [field.field]: { $regex: searchTerm, $options: "i" },
       });
     });
 
-  // Process referenced fields
   const refConfigs = config.filter((field) => field.ref);
 
   refConfigs.forEach((refConfig) => {
-    // Add a single $lookup stage for each reference
     pipeline.push({
       $lookup: {
-        from: refConfig.refModel.toLowerCase() + 's', // e.g., 'users', 'mines'
+        from: refConfig.refModel.toLowerCase() + "s",
         localField: refConfig.ref,
-        foreignField: '_id',
+        foreignField: "_id",
         as: `${refConfig.ref}_details`,
       },
     });
 
-    // Unwind the result of the lookup
-    // Using preserveNullAndEmptyArrays to not lose documents that don't have the reference
     pipeline.push({
       $unwind: {
         path: `$${refConfig.ref}_details`,
@@ -39,18 +34,16 @@ export const buildSearchQuery = (model, searchTerm) => {
       },
     });
 
-    // Add search conditions for all fields within this reference to the main $or array
     refConfig.fields.forEach((subField) => {
       orConditions.push({
         [`${refConfig.ref}_details.${subField}`]: {
           $regex: searchTerm,
-          $options: 'i',
+          $options: "i",
         },
       });
     });
   });
 
-  // Add a single $match stage with all conditions combined
   if (orConditions.length > 0) {
     pipeline.push({
       $match: { $or: orConditions },

@@ -21,7 +21,7 @@ export const createNotification = async ({ recipient_id, type, title, message, p
       body: message,
       data: {
         type,
-        payload, 
+        payload,
         notification_id: n._id.toString(),
       },
       priority: "high",
